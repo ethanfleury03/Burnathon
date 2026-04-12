@@ -10,7 +10,10 @@ _client: AsyncOpenAI | None = None
 def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncOpenAI(api_key=settings.openai_api_key)
+        _client = AsyncOpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+        )
     return _client
 
 
@@ -18,7 +21,7 @@ async def summarize(transcript: str) -> str:
     """Generate a concise summary of a lecture transcript."""
     client = _get_client()
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.openrouter_model,
         messages=[
             {
                 "role": "system",
@@ -39,7 +42,7 @@ async def generate_quiz(transcript: str) -> dict:
     """Generate quiz questions and flashcards from a lecture transcript."""
     client = _get_client()
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model=settings.openrouter_model,
         messages=[
             {
                 "role": "system",
