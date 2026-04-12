@@ -144,7 +144,7 @@ async def sample_lecture(db_session: AsyncSession, user: User, sample_class: Cla
 
 def _make_client(acting_user: User):
     """Build an AsyncClient whose auth dependency returns `acting_user`."""
-    from app.dependencies import get_current_user, get_db
+    from app.dependencies import get_current_user, get_db, verify_clerk_jwt
     from app.main import app
 
     async def _override_db():
@@ -154,8 +154,12 @@ def _make_client(acting_user: User):
     async def _override_user():
         return acting_user
 
+    async def _override_jwt():
+        return {"sub": acting_user.clerk_user_id}
+
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_current_user] = _override_user
+    app.dependency_overrides[verify_clerk_jwt] = _override_jwt
 
     return AsyncClient(
         transport=ASGITransport(app=app),

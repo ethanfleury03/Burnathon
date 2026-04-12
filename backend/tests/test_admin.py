@@ -21,6 +21,12 @@ async def test_admin_lectures_forbidden_for_normal_user(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_admin_classes_forbidden_for_normal_user(client: AsyncClient):
+    resp = await client.get("/api/admin/classes")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_role_change_forbidden_for_normal_user(client: AsyncClient, user: User):
     resp = await client.patch(
         f"/api/admin/users/{user.id}",
@@ -39,6 +45,18 @@ async def test_admin_list_users(admin_client: AsyncClient, user: User, admin: Us
     emails = {u["email"] for u in data}
     assert "student@test.com" in emails
     assert "admin@test.com" in emails
+
+
+@pytest.mark.asyncio
+async def test_admin_list_all_classes(admin_client: AsyncClient, sample_class):
+    resp = await admin_client.get("/api/admin/classes")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 1
+    cs101 = next(cls for cls in data if cls["title"] == "CS 101")
+    assert cs101["owner_user_id"] == str(sample_class.owner_user_id)
+    assert "lecture_count" in cs101
+    assert isinstance(cs101["lecture_count"], int)
 
 
 @pytest.mark.asyncio

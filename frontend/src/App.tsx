@@ -14,6 +14,7 @@ import ClassDetailPage from "./pages/ClassDetailPage";
 import LectureDetailPage from "./pages/LectureDetailPage";
 import NewLecturePage from "./pages/NewLecturePage";
 import AdminPage from "./pages/AdminPage";
+import DbPage from "./pages/DbPage";
 
 function NavBar() {
   const { user } = useUser();
@@ -34,6 +35,12 @@ function NavBar() {
           className="text-sm text-gray-600 hover:text-gray-900"
         >
           New Lecture
+        </Link>
+        <Link
+          to="/db"
+          className="text-sm text-gray-600 hover:text-gray-900"
+        >
+          DB
         </Link>
       </div>
       <div className="flex items-center gap-4">
@@ -69,6 +76,7 @@ export default function App() {
               <Route path="/lectures/:lectureId" element={<LectureDetailPage />} />
               <Route path="/new-lecture" element={<NewLecturePage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/db" element={<DbPage />} />
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>

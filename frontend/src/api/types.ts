@@ -18,6 +18,20 @@ export interface MeOut {
   stats: UserStats;
 }
 
+/** SQLAlchemy model column (development DB tab). */
+export interface DbColumnOut {
+  name: string;
+  type: string;
+  nullable: boolean;
+  primary_key: boolean;
+  foreign_keys: string[];
+}
+
+export interface DbTableOut {
+  name: string;
+  columns: DbColumnOut[];
+}
+
 export interface ClassOut {
   id: string;
   owner_user_id: string;

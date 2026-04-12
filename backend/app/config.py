@@ -5,6 +5,7 @@ from pathlib import Path
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/burnathon"
     clerk_secret_key: str = ""
+    # Backend API JWKS (needs CLERK_SECRET_KEY). Alternative: Frontend API + "/.well-known/jwks.json" (no secret).
     clerk_jwks_url: str = "https://api.clerk.com/v1/jwks"
     upload_dir: str = str(Path(__file__).resolve().parent.parent / "uploads")
     whisper_model: str = "base"

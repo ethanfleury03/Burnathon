@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.dependencies import DB, CurrentUser
 from app.models import Class, Lecture
-from app.routers import admin, classes, lectures
+from app.routers import admin, classes, db_meta, lectures
 from app.schemas import MeOut, UserOut, UserStats
 
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(classes.router)
 app.include_router(lectures.router)
 app.include_router(admin.router)
+app.include_router(db_meta.router)
 
 uploads_path = Path(settings.upload_dir)
 uploads_path.mkdir(parents=True, exist_ok=True)

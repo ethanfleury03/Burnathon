@@ -21,11 +21,18 @@ async def get_db() -> AsyncSession:
         yield session
 
 
+def _jwks_request_headers() -> dict[str, str]:
+    """Clerk Backend API JWKS (`api.clerk.com/v1/jwks`) requires Bearer auth with the secret key."""
+    if settings.clerk_secret_key and "api.clerk.com" in settings.clerk_jwks_url:
+        return {"Authorization": f"Bearer {settings.clerk_secret_key}"}
+    return {}
+
+
 async def _get_jwks() -> dict:
     global _jwks_cache
     if _jwks_cache is None:
         async with httpx.AsyncClient() as client:
-            resp = await client.get(settings.clerk_jwks_url)
+            resp = await client.get(settings.clerk_jwks_url, headers=_jwks_request_headers())
             resp.raise_for_status()
             _jwks_cache = resp.json()
     return _jwks_cache
@@ -54,6 +61,12 @@ async def _verify_clerk_token(token: str) -> dict:
         return payload
     except JWTError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid token: {e}")
+
+
+async def verify_clerk_jwt(request: Request) -> dict:
+    """Validates Bearer token with Clerk JWKS only (no database)."""
+    token = _extract_token(request)
+    return await _verify_clerk_token(token)
 
 
 async def get_current_user(
@@ -95,5 +108,6 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
 
 
 DB = Annotated[AsyncSession, Depends(get_db)]
+ClerkJWTPayload = Annotated[dict, Depends(verify_clerk_jwt)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AdminUser = Annotated[User, Depends(require_admin)]

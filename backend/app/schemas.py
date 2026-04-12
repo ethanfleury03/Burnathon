@@ -34,6 +34,21 @@ class AdminUserUpdate(BaseModel):
     role: UserRole
 
 
+# ── DB schema (development) ────────────────────────────────────────
+
+class DbColumnOut(BaseModel):
+    name: str
+    type: str
+    nullable: bool
+    primary_key: bool
+    foreign_keys: list[str] = []
+
+
+class DbTableOut(BaseModel):
+    name: str
+    columns: list[DbColumnOut]
+
+
 # ── Class ───────────────────────────────────────────────────────────
 
 class ClassCreate(BaseModel):
