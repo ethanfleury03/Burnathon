@@ -1,6 +1,5 @@
 """Tests for lecture upload, retrieval, soft-delete, and quiz generation trigger."""
 
-import io
 import uuid
 from unittest.mock import AsyncMock, patch
 

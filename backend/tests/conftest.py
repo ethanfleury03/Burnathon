@@ -7,13 +7,11 @@ External services (transcription, OpenAI) are mocked.
 """
 
 import uuid
-from datetime import datetime, timezone
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import JSON, String, event
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.models import Base, Class, Lecture, LectureStatus, User, UserRole

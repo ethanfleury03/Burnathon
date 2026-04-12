@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -80,8 +81,6 @@ async def delete_lecture(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
     if user.role != UserRole.admin and lecture.owner_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
-
-    from datetime import datetime, timezone
 
     lecture.deleted_at = datetime.now(timezone.utc)
     await db.commit()

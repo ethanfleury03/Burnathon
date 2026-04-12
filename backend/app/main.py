@@ -1,6 +1,6 @@
 import logging
+from pathlib import Path
 
-from fastapi import APIRouter, Depends
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -27,8 +27,6 @@ app.add_middleware(
 app.include_router(classes.router)
 app.include_router(lectures.router)
 app.include_router(admin.router)
-
-from pathlib import Path
 
 uploads_path = Path(settings.upload_dir)
 uploads_path.mkdir(parents=True, exist_ok=True)
