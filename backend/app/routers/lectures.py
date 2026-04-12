@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
 from app.dependencies import DB, CurrentUser
@@ -19,12 +19,12 @@ router = APIRouter(tags=["lectures"])
 )
 async def upload_lecture(
     class_id: uuid.UUID,
-    title: str,
     audio: UploadFile,
     user: CurrentUser,
     db: DB,
     background_tasks: BackgroundTasks,
-    notes: str | None = None,
+    title: str = Form(...),
+    notes: str | None = Form(None),
 ):
     result = await db.execute(select(Class).where(Class.id == class_id))
     cls = result.scalar_one_or_none()

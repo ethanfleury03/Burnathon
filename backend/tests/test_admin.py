@@ -84,10 +84,13 @@ async def test_admin_list_all_lectures(admin_client: AsyncClient, sample_lecture
 
 @pytest.mark.asyncio
 async def test_admin_list_lectures_includes_soft_deleted(
-    admin_client: AsyncClient, client: AsyncClient, sample_lecture: Lecture
+    admin_client: AsyncClient, sample_lecture: Lecture
 ):
     """Admin lecture list should include soft-deleted lectures (no deleted_at filter)."""
-    await client.delete(f"/api/lectures/{sample_lecture.id}")
+    # Admin deletes the lecture (soft-delete)
+    resp = await admin_client.delete(f"/api/lectures/{sample_lecture.id}")
+    assert resp.status_code == 204
+    # Admin list should still show it (no deleted_at filter on admin endpoint)
     resp = await admin_client.get("/api/admin/lectures")
     assert resp.status_code == 200
     assert len(resp.json()) >= 1

@@ -8,12 +8,16 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    JSON,
     String,
     Text,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# JSON type that uses JSONB on PostgreSQL, plain JSON elsewhere (e.g. SQLite in tests)
+PortableJSON = JSON().with_variant(JSONB, "postgresql")
 
 
 class Base(DeclarativeBase):
@@ -88,7 +92,7 @@ class Lecture(Base):
     notes_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    quiz_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    quiz_data: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
     status: Mapped[LectureStatus] = mapped_column(
         Enum(LectureStatus), nullable=False, default=LectureStatus.uploaded, index=True
     )
