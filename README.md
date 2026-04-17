@@ -73,11 +73,22 @@ Burnathon/
 
 ## Prerequisites
 
-- **Python 3.10+**
+- **git**
+- **Python 3.10+** (3.12 recommended) -- via system Python, `pyenv`, or Miniconda
 - **Node.js 20+**
-- **PostgreSQL** running locally
+- **PostgreSQL 16**
 - **Clerk account** with Google sign-in enabled
 - **OpenRouter API key** (for AI summaries and quizzes)
+
+If you do not have `git` yet:
+
+```bash
+# Ubuntu / WSL
+sudo apt update && sudo apt install -y git
+
+# macOS (Homebrew)
+brew install git
+```
 
 ## Installation
 
@@ -85,20 +96,88 @@ Burnathon/
 
 ```bash
 git clone <repo-url> && cd Burnathon
+```
 
-# Create the PostgreSQL database
+#### Install PostgreSQL (skip if already installed)
+
+**Ubuntu / WSL (Debian-based):**
+
+```bash
+sudo apt update
+sudo apt install -y postgresql
+
+# Start the service (WSL does not use systemd by default)
+sudo service postgresql start
+
+# Optional: verify it is listening on 127.0.0.1:5432
+pg_isready -h 127.0.0.1 -p 5432
+```
+
+**macOS (Homebrew):**
+
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+```
+
+By default PostgreSQL creates a `postgres` superuser. The `DATABASE_URL` below
+assumes a password of `postgres`; set one with:
+
+```bash
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+```
+
+#### Create the database
+
+```bash
 sudo -u postgres createdb burnathon
 ```
 
 ### 2. Backend setup
 
+Pick one of the two Python environment options. **venv** is the lightweight
+default; **Miniconda** is a good choice if you already use conda or want a
+project-specific Python version without touching the system install.
+
+#### Option A -- venv (uses whatever `python3` is on your system)
+
 ```bash
 cd backend
-
-# Create a virtual environment (or use conda)
 python3 -m venv .venv
 source .venv/bin/activate
+```
 
+#### Option B -- Miniconda (skip if you already have conda/anaconda)
+
+Install Miniconda:
+
+```bash
+# Ubuntu / WSL
+mkdir -p ~/miniconda3
+curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o ~/miniconda3/miniconda.sh
+bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3
+rm ~/miniconda3/miniconda.sh
+~/miniconda3/bin/conda init bash
+# Open a new shell so `conda` is on PATH
+
+# macOS (Homebrew)
+brew install --cask miniconda
+conda init "$(basename "$SHELL")"
+```
+
+Create and activate the project env:
+
+```bash
+cd backend
+conda create -n burnathon python=3.12 -y
+conda activate burnathon
+```
+
+#### Install Python dependencies and run migrations
+
+Regardless of which option you picked above, from the activated environment:
+
+```bash
 # Install dependencies
 pip install -r requirements.txt
 
@@ -112,8 +191,44 @@ alembic upgrade head
 
 ### 3. Frontend setup
 
+#### Install Node.js 20 (skip if already installed)
+
+The frontend requires **Node.js 20+** (Clerk, Vite 6, and react-router 7 will
+fail to install on older versions). Ubuntu's default `apt install nodejs`
+ships Node 12, which is too old, so use `nvm` or the NodeSource apt repo.
+
+**Option A -- nvm (recommended, no sudo needed):**
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+# Open a new shell, then:
+nvm install 20
+nvm use 20
+node -v   # should print v20.x
+```
+
+**Option B -- NodeSource apt repo (Ubuntu/WSL):**
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v
+```
+
+**macOS (Homebrew):**
+
+```bash
+brew install node@20
+brew link --overwrite --force node@20
+```
+
+#### Install dependencies
+
 ```bash
 cd frontend
+
+# If you previously ran `npm install` on an older Node, clear the broken tree first:
+# rm -rf node_modules package-lock.json
 
 # Install dependencies
 npm install
