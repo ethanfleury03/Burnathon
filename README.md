@@ -253,7 +253,7 @@ cp .env.example .env
 | `OPENROUTER_BASE_URL` | OpenRouter API endpoint | `https://openrouter.ai/api/v1` |
 | `OPENROUTER_MODEL` | Model for summaries/quizzes | `deepseek/deepseek-v3.2` |
 | `STORAGE_BACKEND` | `local` or `gcs` | `local` |
-| `ALLOWED_ORIGINS` | CORS allowed origins (JSON array string, e.g. `["https://app.example.com"]`) | `["http://localhost:5173"]` |
+| `ALLOWED_ORIGINS` | CORS origins: **comma-separated** URLs (simplest in production), or a **JSON array** string, e.g. `["https://app.example.com"]` | `http://localhost:5173` |
 
 ### Frontend (`frontend/.env`)
 
@@ -436,7 +436,7 @@ sudo nano /etc/brainrip/backend.env
 - No `export`
 - Lines starting with `#` are comments
 - Do not wrap values in quotes unless the quotes are part of the value
-- For JSON in **`ALLOWED_ORIGINS`**, use a **single line** (double quotes inside the JSON are fine)
+- For **`ALLOWED_ORIGINS`**, prefer a **comma-separated** list (no JSON): `https://a.com,https://b.com` — avoids quoting issues with systemd. JSON arrays are still supported if every origin is a JSON string (e.g. `["https://a.com"]`).
 
 **Example** — replace secrets, domain, and DB credentials:
 
@@ -467,7 +467,7 @@ STORAGE_BACKEND=local
 # GCS_BUCKET=your-bucket
 
 # Required in production: browser origin(s) hitting the API (HTTPS)
-ALLOWED_ORIGINS=["https://your.domain"]
+ALLOWED_ORIGINS=https://your.domain
 ```
 
 After saving, tighten ownership if you used `nano` as root:
