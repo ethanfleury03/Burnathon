@@ -1,20 +1,24 @@
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-import sys
-from pathlib import Path
-
+# Resolve app package before importing config (DATABASE_URL / .env via Settings).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.models import Base
+from app.config import settings  # noqa: E402
+from app.models import Base  # noqa: E402
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Never put real credentials in alembic.ini — use DATABASE_URL or backend/.env only.
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 
