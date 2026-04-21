@@ -4,6 +4,10 @@ import { api } from "../api/client";
 import type { LectureDetail } from "../api/types";
 import MarkdownBody from "../components/MarkdownBody";
 import QuizView from "../components/QuizView";
+import {
+  downloadTextFile,
+  safeFilenameSegment,
+} from "../utils/download";
 
 const statusLabels: Record<string, string> = {
   uploaded: "Uploaded - waiting to process",
@@ -58,6 +62,8 @@ export default function LectureDetailPage() {
   if (!lecture) return <p className="text-gray-500">Loading...</p>;
 
   const isProcessing = !["ready", "failed"].includes(lecture.status);
+  const audioFilesUrl = `/files/${lecture.id}/${lecture.audio_original_filename}`;
+  const safeTitle = safeFilenameSegment(lecture.title, "lecture");
 
   return (
     <div className="space-y-6">
@@ -83,15 +89,20 @@ export default function LectureDetailPage() {
       </div>
 
       <div className="bg-white rounded-xl border p-4">
-        <audio
-          controls
-          src={`/files/${lecture.id}/${lecture.audio_original_filename}`}
-          className="w-full"
-        />
-        <p className="text-xs text-gray-400 mt-1">
-          {lecture.audio_original_filename} &middot;{" "}
-          {(lecture.audio_size_bytes / 1048576).toFixed(1)} MB
-        </p>
+        <audio controls src={audioFilesUrl} className="w-full" />
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-gray-400">
+            {lecture.audio_original_filename} &middot;{" "}
+            {(lecture.audio_size_bytes / 1048576).toFixed(1)} MB
+          </p>
+          <a
+            href={audioFilesUrl}
+            download={lecture.audio_original_filename}
+            className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0"
+          >
+            Download audio
+          </a>
+        </div>
       </div>
 
       {lecture.status === "ready" && (
@@ -114,13 +125,55 @@ export default function LectureDetailPage() {
 
           <div className="bg-white rounded-xl border p-6">
             {activeTab === "summary" && (
-              <MarkdownBody>
-                {lecture.summary_text || "No summary available."}
-              </MarkdownBody>
+              <div className="space-y-4">
+                {lecture.summary_text ? (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = lecture.summary_text;
+                        if (!text) return;
+                        downloadTextFile(
+                          text,
+                          `${safeTitle}-summary.md`,
+                          "text/markdown;charset=utf-8"
+                        );
+                      }}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Download summary (.md)
+                    </button>
+                  </div>
+                ) : null}
+                <MarkdownBody>
+                  {lecture.summary_text || "No summary available."}
+                </MarkdownBody>
+              </div>
             )}
             {activeTab === "transcript" && (
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap text-gray-700">
-                {lecture.transcript_text || "No transcript available."}
+              <div className="space-y-4">
+                {lecture.transcript_text ? (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = lecture.transcript_text;
+                        if (!text) return;
+                        downloadTextFile(
+                          text,
+                          `${safeTitle}-transcript.txt`,
+                          "text/plain;charset=utf-8"
+                        );
+                      }}
+                      className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                    >
+                      Download transcript (.txt)
+                    </button>
+                  </div>
+                ) : null}
+                <div className="prose prose-sm max-w-none whitespace-pre-wrap text-gray-700">
+                  {lecture.transcript_text || "No transcript available."}
+                </div>
               </div>
             )}
             {activeTab === "notes" && (

@@ -10,6 +10,7 @@ A web app for students to organize lecture audio, get automatic transcriptions, 
 - **Automatic transcription** using faster-whisper (runs locally, no cloud API)
 - **AI summaries** generated from transcripts via OpenRouter (DeepSeek V3.2), shown as formatted Markdown in the app
 - **Quiz & flashcard generation** from lecture content
+- **Downloads** on each lecture: original audio, transcript as `.txt`, summary as `.md`
 - **Usage tracking** -- classes, lectures, and audio duration per user
 - **Admin panel** -- manage users, roles, and moderate content
 
