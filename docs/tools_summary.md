@@ -11,8 +11,13 @@ A typed superset of JavaScript that catches errors at compile time rather than r
 ### Clerk React SDK
 A drop-in authentication and user management solution. You get sign-in/sign-up UI, session management, JWTs, and social OAuth without building any of it. Fast to integrate and handles a lot of security footguns for you. The disadvantages are vendor lock-in, cost at scale, and less control compared to rolling your own auth — if you need unusual auth flows, you may hit its limits.
 
-###TailwindCSS
+### TailwindCSS
 A utility-first CSS framework where you style by composing small class names directly in markup. It eliminates context-switching between files and produces consistent, purged CSS bundles. Critics point to verbose, cluttered JSX and a steeper initial learning curve if you're used to semantic CSS. Also harder to enforce design consistency without a component library on top of it.
+
+The **@tailwindcss/typography** plugin adds the `prose` utilities so long-form HTML (headings, lists, emphasis, links) reads well without hand-writing rules for every element. Here it styles lecture summaries after they are parsed from Markdown.
+
+### react-markdown and remark-gfm
+**react-markdown** turns Markdown strings into React elements without `dangerouslySetInnerHTML`, so arbitrary HTML in model output is not executed by default. **remark-gfm** extends parsing with GitHub-flavored Markdown (tables, task lists, strikethrough, more predictable lists). Together they drive the formatted summary view on the lecture page.
 
 ## Backend
 ### Python 3.12
