@@ -8,7 +8,7 @@ A web app for students to organize lecture audio, get automatic transcriptions, 
 - **Create classes** to organize lectures by course
 - **Upload or record audio** directly in the browser
 - **Automatic transcription** using faster-whisper (runs locally, no cloud API)
-- **AI summaries** generated from transcripts via OpenRouter (DeepSeek V3.2)
+- **AI summaries** generated from transcripts via OpenRouter (DeepSeek V3.2), shown as formatted Markdown in the app
 - **Quiz & flashcard generation** from lecture content
 - **Usage tracking** -- classes, lectures, and audio duration per user
 - **Admin panel** -- manage users, roles, and moderate content
@@ -17,7 +17,7 @@ A web app for students to organize lecture audio, get automatic transcriptions, 
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite, TypeScript, TailwindCSS, Clerk React SDK |
+| Frontend | React 18, Vite, TypeScript, Tailwind CSS (+ Typography), react-markdown, remark-gfm, Clerk React SDK |
 | Backend | Python 3.12, FastAPI, SQLAlchemy 2.0 (async), Alembic |
 | Database | PostgreSQL 16 |
 | Auth | Clerk (Google-only sign-in) |
@@ -60,6 +60,7 @@ brainrip/
 │   │   │   ├── AudioRecorder.tsx # MediaRecorder with timer
 │   │   │   ├── ClassCard.tsx    # Class list card
 │   │   │   ├── LectureCard.tsx  # Lecture list card with status badge
+│   │   │   ├── MarkdownBody.tsx # Summary Markdown → prose-styled HTML
 │   │   │   └── QuizView.tsx     # Interactive quiz + flashcard UI
 │   │   └── pages/
 │   │       ├── DashboardPage.tsx    # Stats, class list, create class

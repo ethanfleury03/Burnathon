@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { LectureDetail } from "../api/types";
+import MarkdownBody from "../components/MarkdownBody";
 import QuizView from "../components/QuizView";
 
 const statusLabels: Record<string, string> = {
@@ -113,9 +114,9 @@ export default function LectureDetailPage() {
 
           <div className="bg-white rounded-xl border p-6">
             {activeTab === "summary" && (
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+              <MarkdownBody>
                 {lecture.summary_text || "No summary available."}
-              </div>
+              </MarkdownBody>
             )}
             {activeTab === "transcript" && (
               <div className="prose prose-sm max-w-none whitespace-pre-wrap text-gray-700">
