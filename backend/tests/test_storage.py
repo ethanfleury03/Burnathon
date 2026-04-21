@@ -16,7 +16,7 @@ async def test_local_storage_save_and_retrieve(tmp_path):
     key = await storage.save(lecture_id, "recording.webm", data)
 
     assert key == f"{lecture_id}/recording.webm"
-    assert storage.get_url(key) == f"/files/{lecture_id}/recording.webm"
+    assert storage.get_url(key) == f"/api/lectures/{lecture_id}/audio"
 
     local_path = storage.get_local_path(key)
     assert local_path is not None

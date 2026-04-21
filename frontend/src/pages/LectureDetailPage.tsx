@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { LectureDetail } from "../api/types";
 import MarkdownBody from "../components/MarkdownBody";
 import QuizView from "../components/QuizView";
 import {
+  downloadBlob,
   downloadTextFile,
   safeFilenameSegment,
 } from "../utils/download";
@@ -23,6 +24,11 @@ export default function LectureDetailPage() {
   const [error, setError] = useState("");
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [activeTab, setActiveTab] = useState<"transcript" | "summary" | "quiz" | "notes">("summary");
+  const [audioObjectUrl, setAudioObjectUrl] = useState<string | null>(null);
+  const [audioLoadError, setAudioLoadError] = useState("");
+  const [audioLoading, setAudioLoading] = useState(false);
+  const audioBlobRef = useRef<Blob | null>(null);
+  const audioBlobUrlRef = useRef<string | null>(null);
 
   const fetchLecture = () => {
     if (!lectureId) return;
@@ -45,6 +51,56 @@ export default function LectureDetailPage() {
     return () => clearInterval(interval);
   }, [lectureId, lecture?.status]);
 
+  // Audio is fetched with Clerk Bearer via fetch + blob URL: plain <audio src="/..."> cannot send Authorization.
+  useEffect(() => {
+    if (!lectureId) return;
+    let cancelled = false;
+
+    const revoke = () => {
+      if (audioBlobUrlRef.current) {
+        URL.revokeObjectURL(audioBlobUrlRef.current);
+        audioBlobUrlRef.current = null;
+      }
+    };
+
+    revoke();
+    audioBlobRef.current = null;
+    setAudioObjectUrl(null);
+    setAudioLoadError("");
+    setAudioLoading(true);
+
+    void (async () => {
+      try {
+        const blob = await api.getBlob(`/api/lectures/${lectureId}/audio`);
+        if (cancelled) return;
+        const u = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(u);
+          return;
+        }
+        audioBlobUrlRef.current = u;
+        audioBlobRef.current = blob;
+        setAudioObjectUrl(u);
+      } catch (e: unknown) {
+        if (!cancelled) {
+          audioBlobRef.current = null;
+          setAudioLoadError(
+            e instanceof Error ? e.message : "Could not load audio"
+          );
+        }
+      } finally {
+        if (!cancelled) setAudioLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      revoke();
+      audioBlobRef.current = null;
+      setAudioObjectUrl(null);
+    };
+  }, [lectureId]);
+
   const handleGenerateQuiz = async () => {
     if (!lectureId) return;
     setGeneratingQuiz(true);
@@ -62,8 +118,21 @@ export default function LectureDetailPage() {
   if (!lecture) return <p className="text-gray-500">Loading...</p>;
 
   const isProcessing = !["ready", "failed"].includes(lecture.status);
-  const audioFilesUrl = `/files/${lecture.id}/${lecture.audio_original_filename}`;
   const safeTitle = safeFilenameSegment(lecture.title, "lecture");
+
+  const handleDownloadAudio = () => {
+    const blob = audioBlobRef.current;
+    if (blob) {
+      downloadBlob(blob, lecture.audio_original_filename);
+      return;
+    }
+    void api
+      .getBlob(`/api/lectures/${lecture.id}/audio`)
+      .then((b) => downloadBlob(b, lecture.audio_original_filename))
+      .catch((e: unknown) =>
+        setAudioLoadError(e instanceof Error ? e.message : "Download failed")
+      );
+  };
 
   return (
     <div className="space-y-6">
@@ -89,19 +158,29 @@ export default function LectureDetailPage() {
       </div>
 
       <div className="bg-white rounded-xl border p-4">
-        <audio controls src={audioFilesUrl} className="w-full" />
+        {audioLoadError ? (
+          <p className="text-sm text-red-600">{audioLoadError}</p>
+        ) : (
+          <audio
+            controls
+            src={audioObjectUrl ?? undefined}
+            className="w-full"
+          />
+        )}
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-gray-400">
             {lecture.audio_original_filename} &middot;{" "}
             {(lecture.audio_size_bytes / 1048576).toFixed(1)} MB
+            {audioLoading ? " · Loading audio…" : null}
           </p>
-          <a
-            href={audioFilesUrl}
-            download={lecture.audio_original_filename}
-            className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0"
+          <button
+            type="button"
+            onClick={handleDownloadAudio}
+            disabled={audioLoading || !!audioLoadError}
+            className="text-sm font-medium text-indigo-600 hover:text-indigo-800 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Download audio
-          </a>
+          </button>
         </div>
       </div>
 

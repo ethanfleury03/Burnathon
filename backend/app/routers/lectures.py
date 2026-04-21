@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from app.dependencies import DB, CurrentUser
@@ -60,6 +61,29 @@ async def upload_lecture(
     background_tasks.add_task(process_lecture, lecture.id)
 
     return LectureOut.model_validate(lecture)
+
+
+@router.get("/api/lectures/{lecture_id}/audio")
+async def get_lecture_audio(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
+    """Stream lecture audio. Owner or admin only; 404 if soft-deleted, not found, or file missing on disk."""
+    result = await db.execute(select(Lecture).where(Lecture.id == lecture_id, Lecture.deleted_at.is_(None)))
+    lecture = result.scalar_one_or_none()
+    if lecture is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+    if user.role != UserRole.admin and lecture.owner_user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
+
+    storage = get_storage()
+    local_path = storage.get_local_path(lecture.audio_storage_key)
+    if local_path is None or not local_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audio file not found")
+
+    return FileResponse(
+        path=local_path,
+        media_type=lecture.audio_mime_type,
+        filename=lecture.audio_original_filename,
+        content_disposition_type="inline",
+    )
 
 
 @router.get("/api/lectures/{lecture_id}", response_model=LectureDetail)

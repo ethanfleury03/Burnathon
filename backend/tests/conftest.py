@@ -192,3 +192,19 @@ def other_client(other_user: User):
     c = _make_client(other_user)
     yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def anon_client():
+    """HTTP client with test DB but no auth override (requests without Bearer get 401)."""
+    from app.dependencies import get_db
+    from app.main import app
+
+    async def _override_db():
+        async with TestSessionLocal() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _override_db
+    c = AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+    yield c
+    app.dependency_overrides.clear()
