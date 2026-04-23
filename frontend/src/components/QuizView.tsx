@@ -1,134 +1,224 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { QuizData } from "../api/types";
 
+type Mode = "quiz" | "flashcards";
+
 export default function QuizView({ data }: { data: QuizData }) {
-  const [mode, setMode] = useState<"quiz" | "flashcards">("quiz");
+  const [mode, setMode] = useState<Mode>("quiz");
   const [currentCard, setCurrentCard] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showResults, setShowResults] = useState(false);
 
+  const score = useMemo(() => {
+    const correct = data.questions.filter(
+      (q, i) => answers[i] === q.correct_index
+    ).length;
+    return { correct, total: data.questions.length };
+  }, [answers, data.questions]);
+
+  const answeredCount = Object.keys(answers).length;
+
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2">
-        <button
-          onClick={() => setMode("quiz")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === "quiz"
-              ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Quiz ({data.questions.length})
-        </button>
-        <button
-          onClick={() => setMode("flashcards")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-            mode === "flashcards"
-              ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Flashcards ({data.flashcards.length})
-        </button>
+    <div className="space-y-5">
+      {/* Mode toggle */}
+      <div className="inline-flex rounded-md border rule bg-paper-50 p-1">
+        {(
+          [
+            { key: "quiz", label: `Quiz · ${data.questions.length}` },
+            { key: "flashcards", label: `Flashcards · ${data.flashcards.length}` },
+          ] as const
+        ).map((m) => {
+          const active = mode === m.key;
+          return (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => setMode(m.key)}
+              className={`rounded px-3 py-1.5 text-[12.5px] font-medium transition ${
+                active
+                  ? "bg-white text-ink-900 shadow-card"
+                  : "text-ink-500 hover:text-ink-800"
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {mode === "quiz" && (
-        <div className="space-y-6">
-          {data.questions.map((q, qi) => (
-            <div key={qi} className="bg-white rounded-lg border p-4">
-              <p className="font-medium mb-3">
-                {qi + 1}. {q.question}
-              </p>
-              <div className="space-y-2">
-                {q.options.map((opt, oi) => {
-                  const selected = answers[qi] === oi;
-                  const isCorrect = oi === q.correct_index;
-                  let optClass = "border-gray-200 hover:border-indigo-300";
-                  if (showResults && selected && isCorrect)
-                    optClass = "border-green-500 bg-green-50";
-                  else if (showResults && selected && !isCorrect)
-                    optClass = "border-red-500 bg-red-50";
-                  else if (showResults && isCorrect)
-                    optClass = "border-green-400 bg-green-50";
-                  else if (selected) optClass = "border-indigo-500 bg-indigo-50";
+        <>
+          {/* Progress */}
+          <div className="flex items-center justify-between text-[12.5px] text-ink-500">
+            <span>
+              {answeredCount} of {data.questions.length} answered
+            </span>
+            {showResults && (
+              <span className="mono text-ink-700">
+                Score {score.correct} / {score.total}
+              </span>
+            )}
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-ink-100">
+            <div
+              className="h-full rounded-full bg-ink-800 transition-all"
+              style={{
+                width: `${(answeredCount / data.questions.length) * 100}%`,
+              }}
+            />
+          </div>
 
-                  return (
-                    <button
-                      key={oi}
-                      onClick={() => {
-                        if (!showResults)
-                          setAnswers({ ...answers, [qi]: oi });
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded border text-sm transition ${optClass}`}
-                    >
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          <button
-            onClick={() => setShowResults(!showResults)}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition"
-          >
-            {showResults ? "Hide Answers" : "Check Answers"}
-          </button>
-          {showResults && (
-            <p className="text-sm text-gray-600">
-              Score:{" "}
-              {
-                data.questions.filter(
-                  (q, i) => answers[i] === q.correct_index
-                ).length
-              }{" "}
-              / {data.questions.length}
-            </p>
-          )}
-        </div>
+          <ol className="space-y-4">
+            {data.questions.map((q, qi) => (
+              <li key={qi} className="surface overflow-hidden">
+                <div className="border-b rule bg-paper-50 px-4 py-2.5 flex items-center gap-3">
+                  <span className="mono text-[11px] text-ink-400">
+                    Q{String(qi + 1).padStart(2, "0")}
+                  </span>
+                  <p className="font-serif text-[15px] font-semibold leading-snug text-ink-900">
+                    {q.question}
+                  </p>
+                </div>
+                <div className="space-y-2 p-4">
+                  {q.options.map((opt, oi) => {
+                    const selected = answers[qi] === oi;
+                    const isCorrect = oi === q.correct_index;
+                    const state =
+                      showResults && selected && isCorrect
+                        ? "correct"
+                        : showResults && selected && !isCorrect
+                          ? "incorrect"
+                          : showResults && isCorrect
+                            ? "correct-unselected"
+                            : selected
+                              ? "selected"
+                              : "idle";
+
+                    const classes: Record<typeof state, string> = {
+                      idle: "border-[var(--rule)] bg-white hover:border-[var(--rule-strong)]",
+                      selected: "border-ink-800 bg-paper-50",
+                      correct: "border-moss-200 bg-moss-50 text-moss-500",
+                      "correct-unselected":
+                        "border-moss-200 bg-moss-50/70 text-moss-500",
+                      incorrect:
+                        "border-accent-200 bg-accent-50 text-accent-600",
+                    };
+
+                    return (
+                      <button
+                        key={oi}
+                        type="button"
+                        onClick={() => {
+                          if (!showResults)
+                            setAnswers({ ...answers, [qi]: oi });
+                        }}
+                        className={`flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-[13.5px] transition ${classes[state]}`}
+                      >
+                        <span className="mono mt-0.5 text-[11px] text-ink-400">
+                          {String.fromCharCode(65 + oi)}
+                        </span>
+                        <span className="flex-1">{opt}</span>
+                        {state === "correct" && (
+                          <span className="text-moss-500">✓</span>
+                        )}
+                        {state === "correct-unselected" && (
+                          <span className="text-moss-500">✓</span>
+                        )}
+                        {state === "incorrect" && (
+                          <span className="text-accent-500">✗</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowResults((v) => !v)}
+              disabled={!showResults && answeredCount === 0}
+              className="btn btn-primary"
+            >
+              {showResults ? "Hide answers" : "Check answers"}
+            </button>
+            {showResults && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAnswers({});
+                  setShowResults(false);
+                }}
+                className="btn btn-secondary"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </>
       )}
 
       {mode === "flashcards" && data.flashcards.length > 0 && (
         <div className="space-y-4">
-          <div
-            onClick={() => setFlipped(!flipped)}
-            className="bg-white rounded-xl border-2 border-gray-200 p-8 min-h-[200px] flex items-center justify-center cursor-pointer hover:shadow-md transition"
-          >
-            <p className="text-lg text-center">
-              {flipped
-                ? data.flashcards[currentCard].back
-                : data.flashcards[currentCard].front}
+          <div className="mx-auto max-w-lg">
+            <button
+              type="button"
+              onClick={() => setFlipped((v) => !v)}
+              className={`relative flex min-h-[220px] w-full items-center justify-center rounded-[14px] border border-[var(--rule-strong)] px-8 py-10 text-center transition ${
+                flipped
+                  ? "bg-paper-50 text-ink-700"
+                  : "bg-white text-ink-900"
+              }`}
+              aria-label="Flip card"
+            >
+              <span className="absolute top-3 left-4 eyebrow">
+                {flipped ? "Back" : "Front"}
+              </span>
+              <p
+                className={`font-serif leading-[1.3] ${
+                  flipped ? "text-[17px]" : "text-[22px] font-semibold"
+                }`}
+              >
+                {flipped
+                  ? data.flashcards[currentCard].back
+                  : data.flashcards[currentCard].front}
+              </p>
+              <span className="absolute bottom-3 right-4 mono text-[11px] text-ink-400">
+                {currentCard + 1} / {data.flashcards.length}
+              </span>
+            </button>
+            <p className="mt-2 text-center text-[12px] text-ink-400">
+              Click the card to flip.
             </p>
           </div>
-          <p className="text-center text-sm text-gray-400">
-            Click card to flip
-          </p>
-          <div className="flex items-center justify-between">
+
+          <div className="flex items-center justify-center gap-2">
             <button
+              type="button"
               onClick={() => {
-                setCurrentCard(Math.max(0, currentCard - 1));
+                setCurrentCard((c) => Math.max(0, c - 1));
                 setFlipped(false);
               }}
               disabled={currentCard === 0}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+              className="btn btn-secondary"
             >
-              Previous
+              ← Previous
             </button>
-            <span className="text-sm text-gray-500">
-              {currentCard + 1} / {data.flashcards.length}
-            </span>
             <button
+              type="button"
               onClick={() => {
-                setCurrentCard(
-                  Math.min(data.flashcards.length - 1, currentCard + 1)
+                setCurrentCard((c) =>
+                  Math.min(data.flashcards.length - 1, c + 1)
                 );
                 setFlipped(false);
               }}
               disabled={currentCard === data.flashcards.length - 1}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+              className="btn btn-secondary"
             >
-              Next
+              Next →
             </button>
           </div>
         </div>

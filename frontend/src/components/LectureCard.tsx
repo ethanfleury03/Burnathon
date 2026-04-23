@@ -1,37 +1,77 @@
 import { Link } from "react-router-dom";
 import type { LectureOut } from "../api/types";
+import {
+  formatBytes,
+  formatDateShort,
+  formatDuration,
+  formatRelative,
+} from "../lib/format";
+import { StatusPill } from "./ui/StatusPill";
 
-const statusColors: Record<string, string> = {
-  uploaded: "bg-blue-100 text-blue-700",
-  transcribing: "bg-yellow-100 text-yellow-700",
-  summarizing: "bg-purple-100 text-purple-700",
-  ready: "bg-green-100 text-green-700",
-  failed: "bg-red-100 text-red-700",
-};
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
+interface LectureCardProps {
+  lecture: LectureOut;
+  index?: number;
+  dense?: boolean;
 }
 
-export default function LectureCard({ lecture }: { lecture: LectureOut }) {
+/**
+ * Editorial list row for a lecture.
+ * Information architecture:
+ *   • leading index + serif title + status
+ *   • meta row: duration · uploaded · filename · size
+ */
+export default function LectureCard({ lecture, index, dense }: LectureCardProps) {
   return (
     <Link
       to={`/lectures/${lecture.id}`}
-      className="block bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition"
+      className="group block rounded-[10px] border bg-white px-4 py-3 shadow-card transition hover:-translate-y-[1px] hover:shadow-cardHover"
     >
-      <div className="flex items-start justify-between">
-        <h4 className="font-medium text-gray-900 truncate">{lecture.title}</h4>
-        <span
-          className={`text-xs px-2 py-0.5 rounded font-medium ${statusColors[lecture.status] || ""}`}
-        >
-          {lecture.status}
-        </span>
-      </div>
-      <div className="mt-1 text-sm text-gray-500 flex items-center gap-3">
-        <span>{formatBytes(lecture.audio_size_bytes)}</span>
-        <span>{new Date(lecture.uploaded_at).toLocaleDateString()}</span>
+      <div className="flex items-start gap-4">
+        {typeof index === "number" && (
+          <div className="mt-[2px] hidden w-8 flex-none text-right font-serif text-[13px] font-semibold text-ink-400 sm:block">
+            {String(index + 1).padStart(2, "0")}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h4 className="font-serif text-[16px] font-semibold leading-snug tracking-tightish text-ink-900 group-hover:text-ink-800 line-clamp-2">
+              {lecture.title}
+            </h4>
+            <StatusPill status={lecture.status} />
+          </div>
+          {!dense && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-500">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="eyebrow text-[9.5px]">Duration</span>
+                <span className="tabular-nums text-ink-700">
+                  {formatDuration(lecture.duration_seconds)}
+                </span>
+              </span>
+              <span aria-hidden className="text-ink-300">·</span>
+              <span
+                className="inline-flex items-center gap-1.5"
+                title={new Date(lecture.uploaded_at).toLocaleString()}
+              >
+                <span className="eyebrow text-[9.5px]">Uploaded</span>
+                <span className="text-ink-700">
+                  {formatDateShort(lecture.uploaded_at)}
+                </span>
+                <span className="text-ink-400">
+                  · {formatRelative(lecture.uploaded_at)}
+                </span>
+              </span>
+            </div>
+          )}
+          {!dense && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-ink-400 mono">
+              <span className="truncate max-w-[280px]">
+                {lecture.audio_original_filename}
+              </span>
+              <span aria-hidden>·</span>
+              <span>{formatBytes(lecture.audio_size_bytes)}</span>
+            </div>
+          )}
+        </div>
       </div>
     </Link>
   );
