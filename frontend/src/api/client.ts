@@ -2,8 +2,37 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 
 let _getTokenFn: (() => Promise<string | null>) | null = null;
 
+export class ApiError extends Error {
+  status: number;
+  detail: string;
+
+  constructor(status: number, detail: string) {
+    super(detail);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 export function setTokenGetter(fn: () => Promise<string | null>) {
   _getTokenFn = fn;
+}
+
+export function resolveApiUrl(path: string): string {
+  if (!path) return path;
+  if (/^https?:\/\//i.test(path)) return path;
+  if (!API_BASE) return path;
+  const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
+  return new URL(path, base).toString();
+}
+
+export function getApiErrorMessage(
+  error: unknown,
+  fallback = "Something went wrong."
+): string {
+  if (error instanceof ApiError) return error.detail;
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
 }
 
 async function request<T>(
@@ -21,14 +50,14 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(resolveApiUrl(path), {
     ...options,
     headers,
   });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(body.detail || `Request failed: ${res.status}`);
+    throw new ApiError(res.status, body.detail || `Request failed: ${res.status}`);
   }
 
   if (res.status === 204) return undefined as T;

@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from app.dependencies import AdminUser, DB
 from app.models import Class, Lecture, User
+from app.serializers import serialize_lecture
 from app.schemas import AdminUserUpdate, ClassOut, LectureOut, UserOut
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -54,4 +55,4 @@ async def update_user_role(user_id: uuid.UUID, body: AdminUserUpdate, _admin: Ad
 @router.get("/lectures", response_model=list[LectureOut])
 async def list_all_lectures(_admin: AdminUser, db: DB):
     result = await db.execute(select(Lecture).order_by(Lecture.uploaded_at.desc()))
-    return [LectureOut.model_validate(l) for l in result.scalars().all()]
+    return [serialize_lecture(lecture) for lecture in result.scalars().all()]

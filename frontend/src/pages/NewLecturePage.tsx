@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api, getApiErrorMessage } from "../api/client";
 import type { ClassOut, LectureOut } from "../api/types";
 import AudioRecorder from "../components/AudioRecorder";
 
@@ -18,9 +18,25 @@ export default function NewLecturePage() {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [loadingClasses, setLoadingClasses] = useState(true);
 
   useEffect(() => {
-    api.get<ClassOut[]>("/api/classes").then(setClasses);
+    void (async () => {
+      setLoadingClasses(true);
+      try {
+        const classData = await api.get<ClassOut[]>("/api/classes");
+        setClasses(classData);
+      } catch (err) {
+        setError(
+          getApiErrorMessage(
+            err,
+            "We couldn't load your classes. Make sure the backend is running and the database is ready."
+          )
+        );
+      } finally {
+        setLoadingClasses(false);
+      }
+    })();
   }, []);
 
   const onRecordingComplete = useCallback(
@@ -53,8 +69,13 @@ export default function NewLecturePage() {
         formData
       );
       navigate(`/lectures/${lecture.id}`);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (error) {
+      setError(
+        getApiErrorMessage(
+          error,
+          "We couldn't upload the lecture. Please verify the backend setup and try again."
+        )
+      );
     } finally {
       setUploading(false);
     }
@@ -73,9 +94,12 @@ export default function NewLecturePage() {
         <select
           value={selectedClassId}
           onChange={(e) => setSelectedClassId(e.target.value)}
+          disabled={loadingClasses || classes.length === 0}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <option value="">Select a class...</option>
+          <option value="">
+            {loadingClasses ? "Loading classes..." : "Select a class..."}
+          </option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>
               {c.title}
@@ -158,7 +182,7 @@ export default function NewLecturePage() {
 
       <button
         onClick={handleSubmit}
-        disabled={!selectedClassId || !title.trim() || !hasAudio || uploading}
+        disabled={loadingClasses || !selectedClassId || !title.trim() || !hasAudio || uploading}
         className="w-full py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition disabled:opacity-50"
       >
         {uploading ? "Uploading..." : "Upload & Process"}

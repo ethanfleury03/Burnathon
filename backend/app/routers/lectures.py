@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.dependencies import DB, CurrentUser
 from app.models import Class, Lecture, LectureStatus, UserRole
 from app.processing import generate_quiz_for_lecture, process_lecture
+from app.serializers import serialize_lecture, serialize_lecture_detail
 from app.schemas import LectureDetail, LectureOut
 from app.services.storage import get_storage
 
@@ -59,7 +60,7 @@ async def upload_lecture(
 
     background_tasks.add_task(process_lecture, lecture.id)
 
-    return LectureOut.model_validate(lecture)
+    return serialize_lecture(lecture)
 
 
 @router.get("/api/lectures/{lecture_id}", response_model=LectureDetail)
@@ -70,7 +71,7 @@ async def get_lecture(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
     if user.role != UserRole.admin and lecture.owner_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
-    return LectureDetail.model_validate(lecture)
+    return serialize_lecture_detail(lecture)
 
 
 @router.delete("/api/lectures/{lecture_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -106,4 +107,4 @@ async def trigger_quiz_generation(
         )
 
     background_tasks.add_task(generate_quiz_for_lecture, lecture.id)
-    return LectureOut.model_validate(lecture)
+    return serialize_lecture(lecture)

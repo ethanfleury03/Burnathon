@@ -83,6 +83,12 @@ export default function AdminPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            to="/db"
+            className="text-sm px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
+          >
+            Schema
+          </Link>
           <button
             onClick={() => void loadData()}
             className="text-sm px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition"

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 
 from app.dependencies import DB, CurrentUser
 from app.models import Class, Lecture, UserRole
+from app.serializers import serialize_lecture
 from app.schemas import ClassCreate, ClassDetail, ClassOut, ClassUpdate, LectureOut
 
 router = APIRouter(prefix="/api/classes", tags=["classes"])
@@ -75,7 +76,7 @@ async def get_class(class_id: uuid.UUID, user: CurrentUser, db: DB):
         created_at=cls.created_at,
         archived_at=cls.archived_at,
         lecture_count=len(lectures),
-        lectures=[LectureOut.model_validate(l) for l in lectures],
+        lectures=[serialize_lecture(lecture) for lecture in lectures],
     )
 
 

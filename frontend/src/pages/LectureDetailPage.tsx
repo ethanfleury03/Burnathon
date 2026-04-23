@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { ApiError, api, getApiErrorMessage, resolveApiUrl } from "../api/client";
 import type { LectureDetail } from "../api/types";
 import QuizView from "../components/QuizView";
 
@@ -16,19 +16,31 @@ export default function LectureDetailPage() {
   const { lectureId } = useParams<{ lectureId: string }>();
   const [lecture, setLecture] = useState<LectureDetail | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [activeTab, setActiveTab] = useState<"transcript" | "summary" | "quiz" | "notes">("summary");
 
-  const fetchLecture = () => {
+  const fetchLecture = (showLoading = false) => {
     if (!lectureId) return;
+    if (showLoading) setLoading(true);
     api
       .get<LectureDetail>(`/api/lectures/${lectureId}`)
-      .then(setLecture)
-      .catch((e) => setError(e.message));
+      .then((data) => {
+        setLecture(data);
+        setError("");
+      })
+      .catch((err) => {
+        const message =
+          err instanceof ApiError && err.status === 503
+            ? `${err.detail} Check /api/health and your PostgreSQL setup.`
+            : getApiErrorMessage(err, "We couldn't load this lecture.");
+        setError(message);
+      })
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => {
-    fetchLecture();
+    fetchLecture(true);
     const interval = setInterval(() => {
       if (
         lecture &&
@@ -46,20 +58,26 @@ export default function LectureDetailPage() {
     try {
       await api.post(`/api/lectures/${lectureId}/generate-quiz`);
       setTimeout(fetchLecture, 2000);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (error) {
+      setError(getApiErrorMessage(error, "We couldn't generate the quiz."));
     } finally {
       setGeneratingQuiz(false);
     }
   };
 
-  if (error) return <p className="text-red-600">{error}</p>;
-  if (!lecture) return <p className="text-gray-500">Loading...</p>;
+  if (loading && !lecture) return <p className="text-gray-500">Loading...</p>;
+  if (!lecture) return <p className="text-red-600">{error || "Lecture not found."}</p>;
 
   const isProcessing = !["ready", "failed"].includes(lecture.status);
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
       <div>
         <Link
           to={`/classes/${lecture.class_id}`}
@@ -84,7 +102,7 @@ export default function LectureDetailPage() {
       <div className="bg-white rounded-xl border p-4">
         <audio
           controls
-          src={`/files/${lecture.id}/${lecture.audio_original_filename}`}
+          src={resolveApiUrl(lecture.audio_url)}
           className="w-full"
         />
         <p className="text-xs text-gray-400 mt-1">

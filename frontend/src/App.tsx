@@ -36,12 +36,6 @@ function NavBar() {
         >
           New Lecture
         </Link>
-        <Link
-          to="/db"
-          className="text-sm text-gray-600 hover:text-gray-900"
-        >
-          DB
-        </Link>
       </div>
       <div className="flex items-center gap-4">
         <span className="text-sm text-gray-500">{user?.primaryEmailAddress?.emailAddress}</span>

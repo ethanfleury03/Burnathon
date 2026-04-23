@@ -82,6 +82,7 @@ class LectureOut(BaseModel):
     class_id: uuid.UUID
     title: str
     audio_original_filename: str
+    audio_url: str
     audio_size_bytes: int
     duration_seconds: int | None
     status: LectureStatus

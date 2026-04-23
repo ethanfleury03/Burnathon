@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.dependencies import ClerkJWTPayload
+from app.dependencies import AdminUser
 from app.models import Class, Lecture, User
 from app.schemas import DbColumnOut, DbTableOut
 
@@ -26,7 +26,7 @@ def _columns_for(model: type) -> list[DbColumnOut]:
 
 
 @router.get("/schema", response_model=list[DbTableOut])
-async def get_table_schema(_token: ClerkJWTPayload):
+async def get_table_schema(_admin: AdminUser):
     """Current SQLAlchemy model definitions (authoritative app schema)."""
     return [
         DbTableOut(name=User.__tablename__, columns=_columns_for(User)),

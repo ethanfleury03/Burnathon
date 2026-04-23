@@ -1,11 +1,13 @@
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 
+from app.db_ready import classify_database_error, get_database_status
 from app.config import settings
 from app.dependencies import DB, CurrentUser
 from app.models import Class, Lecture
@@ -28,6 +30,17 @@ app.include_router(classes.router)
 app.include_router(lectures.router)
 app.include_router(admin.router)
 app.include_router(db_meta.router)
+
+
+@app.middleware("http")
+async def handle_database_failures(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        detail = classify_database_error(exc)
+        if detail is None:
+            raise
+        return JSONResponse(status_code=503, content={"detail": detail})
 
 uploads_path = Path(settings.upload_dir)
 uploads_path.mkdir(parents=True, exist_ok=True)
@@ -62,4 +75,14 @@ async def get_me(user: CurrentUser, db: DB):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    db_status = await get_database_status()
+    if db_status.ok:
+        return {"status": "ok", "database": "ok"}
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "degraded",
+            "database": "unavailable",
+            "detail": db_status.detail,
+        },
+    )

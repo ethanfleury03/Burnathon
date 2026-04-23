@@ -5,8 +5,14 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_db_schema_any_authenticated_user(client: AsyncClient):
+async def test_db_schema_forbidden_for_normal_user(client: AsyncClient):
     resp = await client.get("/api/db/schema")
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_db_schema_admin_only(admin_client: AsyncClient):
+    resp = await admin_client.get("/api/db/schema")
     assert resp.status_code == 200
     data = resp.json()
     names = {t["name"] for t in data}

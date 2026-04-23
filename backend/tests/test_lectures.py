@@ -31,6 +31,7 @@ async def test_upload_lecture(client: AsyncClient, sample_class: Class, tmp_path
     assert data["status"] == "uploaded"
     assert data["audio_original_filename"] == "test.webm"
     assert data["audio_size_bytes"] == len(b"fake-audio-bytes")
+    assert data["audio_url"] == f"/files/{data['id']}/test.webm"
 
 
 @pytest.mark.asyncio
@@ -79,6 +80,7 @@ async def test_get_lecture_detail(client: AsyncClient, sample_lecture: Lecture):
     assert data["transcript_text"] is not None
     assert data["summary_text"] is not None
     assert data["owner_user_id"] is not None
+    assert data["audio_url"] == f"/files/{sample_lecture.audio_storage_key}"
 
 
 @pytest.mark.asyncio

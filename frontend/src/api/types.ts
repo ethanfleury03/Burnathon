@@ -46,6 +46,7 @@ export interface LectureOut {
   class_id: string;
   title: string;
   audio_original_filename: string;
+  audio_url: string;
   audio_size_bytes: number;
   duration_seconds: number | null;
   status: "uploaded" | "transcribing" | "summarizing" | "ready" | "failed";

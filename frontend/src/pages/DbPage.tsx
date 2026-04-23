@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { api } from "../api/client";
-import type { DbTableOut } from "../api/types";
+import { Link, Navigate } from "react-router-dom";
+import { api, getApiErrorMessage } from "../api/client";
+import type { DbTableOut, MeOut } from "../api/types";
 
 type DbTab = "users" | "classes" | "lectures";
 
 export default function DbPage() {
+  const [me, setMe] = useState<MeOut | null>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
   const [schema, setSchema] = useState<DbTableOut[]>([]);
   const [tab, setTab] = useState<DbTab>("users");
   const [loading, setLoading] = useState(true);
@@ -18,17 +20,41 @@ export default function DbPage() {
       const data = await api.get<DbTableOut[]>("/api/db/schema");
       setSchema(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load schema");
+      setError(getApiErrorMessage(err, "Failed to load schema."));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      try {
+        const currentUser = await api.get<MeOut>("/api/me");
+        setMe(currentUser);
+        if (currentUser.user.role === "admin") {
+          await load();
+        }
+      } catch (err) {
+        setError(getApiErrorMessage(err, "Failed to verify admin access."));
+      } finally {
+        setAccessChecked(true);
+      }
+    })();
   }, []);
 
   const table = schema.find((t) => t.name === tab);
+
+  if (!accessChecked) {
+    return (
+      <div className="bg-white rounded-xl border px-4 py-8 text-sm text-gray-500 text-center">
+        Loading…
+      </div>
+    );
+  }
+
+  if (me?.user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="space-y-6">

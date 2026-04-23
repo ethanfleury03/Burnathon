@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, getApiErrorMessage } from "../api/client";
 import type { ClassOut, MeOut } from "../api/types";
 import ClassCard from "../components/ClassCard";
 
@@ -9,21 +9,62 @@ export default function DashboardPage() {
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [createError, setCreateError] = useState("");
 
   useEffect(() => {
-    api.get<MeOut>("/api/me").then(setMe);
-    api.get<ClassOut[]>("/api/classes").then(setClasses);
+    void (async () => {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const [meData, classesData] = await Promise.all([
+          api.get<MeOut>("/api/me"),
+          api.get<ClassOut[]>("/api/classes"),
+        ]);
+        setMe(meData);
+        setClasses(classesData);
+      } catch (error) {
+        setLoadError(
+          getApiErrorMessage(
+            error,
+            "We couldn't load your dashboard. Make sure the backend is running and the database is ready."
+          )
+        );
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const createClass = async () => {
     if (!newTitle.trim()) return;
     setCreating(true);
+    setCreateError("");
     try {
       const cls = await api.post<ClassOut>("/api/classes", {
         title: newTitle.trim(),
       });
       setClasses([cls, ...classes]);
+      setMe((current) =>
+        current
+          ? {
+              ...current,
+              stats: {
+                ...current.stats,
+                total_classes: current.stats.total_classes + 1,
+              },
+            }
+          : current
+      );
       setNewTitle("");
+    } catch (error) {
+      setCreateError(
+        getApiErrorMessage(
+          error,
+          "We couldn't create the class. Make sure the database is running and migrated."
+        )
+      );
     } finally {
       setCreating(false);
     }
@@ -31,6 +72,18 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      {loadError && (
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+          {loadError}
+        </div>
+      )}
+
+      {loading && (
+        <div className="bg-white rounded-xl border px-4 py-8 text-sm text-gray-500 text-center">
+          Loading dashboard...
+        </div>
+      )}
+
       {me && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white rounded-xl border p-5">
@@ -84,6 +137,10 @@ export default function DashboardPage() {
             Create
           </button>
         </div>
+
+        {createError && (
+          <p className="text-sm text-red-600 mb-4">{createError}</p>
+        )}
 
         {classes.length === 0 ? (
           <p className="text-gray-500 text-center py-12">

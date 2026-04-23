@@ -134,7 +134,7 @@ cp .env.example .env
 | `UPLOAD_DIR` | Directory for audio files | `./uploads` |
 | `WHISPER_MODEL` | faster-whisper model size (`tiny`, `base`, `small`, `medium`, `large-v3`) | `base` |
 | `WHISPER_DEVICE` | `cpu` or `cuda` (NVIDIA GPU) | `cpu` |
-| `OPENROUTER_API_KEY` | OpenRouter API key | (required) |
+| `OPENROUTER_API_KEY` | OpenRouter API key (`OPENAI_API_KEY` is also accepted as a legacy fallback) | (required) |
 | `OPENROUTER_BASE_URL` | OpenRouter API endpoint | `https://openrouter.ai/api/v1` |
 | `OPENROUTER_MODEL` | Model for summaries/quizzes | `deepseek/deepseek-v3.2` |
 | `STORAGE_BACKEND` | `local` or `gcs` | `local` |
@@ -166,6 +166,13 @@ npm run dev
 ```
 
 Open **http://localhost:5173** in your browser.
+
+If the backend reports a degraded health status or class creation fails immediately, make sure PostgreSQL is running and then apply migrations:
+
+```bash
+cd backend
+alembic upgrade head
+```
 
 ## Running Tests
 
