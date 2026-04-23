@@ -3,7 +3,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, select
 
 from app.config import settings
@@ -31,7 +30,6 @@ app.include_router(db_meta.router)
 
 uploads_path = Path(settings.upload_dir)
 uploads_path.mkdir(parents=True, exist_ok=True)
-app.mount("/files", StaticFiles(directory=str(uploads_path)), name="files")
 
 
 @app.get("/api/me", response_model=MeOut)

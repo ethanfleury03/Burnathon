@@ -35,8 +35,24 @@ async function request<T>(
   return res.json();
 }
 
+async function getBlob(path: string): Promise<Blob> {
+  const token = _getTokenFn ? await _getTokenFn() : null;
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(body.detail || `Request failed: ${res.status}`);
+  }
+  return res.blob();
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
+
+  getBlob,
 
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {

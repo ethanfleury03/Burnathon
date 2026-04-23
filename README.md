@@ -10,6 +10,7 @@ A web app for students to organize lecture audio, get automatic transcriptions, 
 - **Automatic transcription** using faster-whisper (runs locally, no cloud API)
 - **AI summaries** generated from transcripts via OpenRouter (DeepSeek V3.2), shown as formatted Markdown in the app
 - **Quiz & flashcard generation** from lecture content
+- **Downloads** on each lecture: original audio, transcript as `.txt`, summary as `.md`
 - **Usage tracking** -- classes, lectures, and audio duration per user
 - **Admin panel** -- manage users, roles, and moderate content
 
@@ -588,8 +589,7 @@ Point **`root`** at **`frontend/dist/`** only. Do **not** use **`/srv/brainrip`*
 |-------------------|--------|
 | **`root`** | Directory nginx searches for files to serve for this `server`. Only the built SPA should live here. |
 | **`index index.html`** | Default file when a path is a directory. |
-| **`location /api/`** | Requests whose path starts with **`/api/`** go to the FastAPI app. **`proxy_pass http://127.0.0.1:8000;`** forwards to uvicorn **without** stripping the path, so `/api/health` becomes `http://127.0.0.1:8000/api/health`. |
-| **`location /files/`** | Uploaded lecture audio is served by FastAPI at **`/files/...`** (**`StaticFiles`**). You must proxy this the same way as **`/api/`**. If you omit it, **`location /`** **`try_files`** does not find a file and serves **`index.html`** for **`/files/...`**, so the **`<audio>`** player breaks (works locally because Vite proxies **`/files`** — see **`frontend/vite.config.ts`**). |
+| **`location /api/`** | Requests whose path starts with **`/api/`** go to the FastAPI app. **`proxy_pass http://127.0.0.1:8000;`** forwards to uvicorn **without** stripping the path, so `/api/health` becomes `http://127.0.0.1:8000/api/health`. Lecture **audio playback and download** use **`GET /api/lectures/{id}/audio`** (Clerk **`Authorization: Bearer`**), not a separate static **`/files`** path. |
 | **`proxy_set_header Host`** | Sends the browser’s hostname to the backend (useful for logs and any host-aware logic). |
 | **`X-Forwarded-For`** | Client IP chain when nginx is the reverse proxy. |
 | **`X-Forwarded-Proto`** | After TLS (post-Certbot), tells the app the original scheme was **`https`**. |
@@ -612,14 +612,6 @@ server {
     index index.html;
 
     location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /files/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -769,14 +761,6 @@ server {
     index index.html;
 
     location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /files/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

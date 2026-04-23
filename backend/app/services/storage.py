@@ -12,7 +12,7 @@ class StorageBackend(ABC):
 
     @abstractmethod
     def get_url(self, storage_key: str) -> str:
-        """Return a URL/path to access the file."""
+        """Return the API path to stream the file (same auth as lecture detail: owner or admin)."""
 
     @abstractmethod
     def get_local_path(self, storage_key: str) -> Path | None:
@@ -32,7 +32,9 @@ class LocalStorage(StorageBackend):
         return f"{lecture_id}/{filename}"
 
     def get_url(self, storage_key: str) -> str:
-        return f"/files/{storage_key}"
+        """Path for GET /api/lectures/{id}/audio; not a public URL—requires Bearer token."""
+        lecture_id, _, _ = storage_key.partition("/")
+        return f"/api/lectures/{lecture_id}/audio"
 
     def get_local_path(self, storage_key: str) -> Path | None:
         return self.base_dir / storage_key
