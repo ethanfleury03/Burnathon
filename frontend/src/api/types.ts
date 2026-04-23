@@ -32,13 +32,35 @@ export interface DbTableOut {
   columns: DbColumnOut[];
 }
 
+export type ClassVisibility = "private" | "public";
+
 export interface ClassOut {
   id: string;
   owner_user_id: string;
   title: string;
   created_at: string;
   archived_at: string | null;
+  visibility: ClassVisibility;
+  published_at: string | null;
   lecture_count: number;
+  can_edit: boolean;
+}
+
+export interface ClassSummaryOut {
+  id: string;
+  title: string;
+  owner_user_id: string;
+  owner_display_name: string | null;
+  lecture_count: number;
+  published_at: string | null;
+  visibility: ClassVisibility;
+}
+
+export interface AugmentedCitation {
+  idx: number;
+  title: string;
+  url: string;
+  snippet: string;
 }
 
 export interface LectureOut {
@@ -60,6 +82,10 @@ export interface LectureDetail extends LectureOut {
   quiz_data: QuizData | null;
   processing_error: string | null;
   owner_user_id: string;
+  can_edit: boolean;
+  augmented_text: string | null;
+  augmented_citations: AugmentedCitation[] | null;
+  augmented_at: string | null;
 }
 
 export interface ClassDetail extends ClassOut {
@@ -76,4 +102,41 @@ export interface QuizData {
     front: string;
     back: string;
   }[];
+}
+
+// ── Chat types ──────────────────────────────────────────────────────
+
+export interface Citation {
+  label: string;
+  lecture_id: string;
+  lecture_title: string;
+  chunk_index: number;
+  excerpt: string;
+}
+
+export interface ClassChatOut {
+  id: string;
+  class_id: string;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassChatMessageOut {
+  id: string;
+  chat_id: string;
+  role: "user" | "assistant";
+  content: string;
+  citations: Citation[] | null;
+  created_at: string;
+}
+
+/** Result of ``POST /api/admin/reindex`` (transcript chunk backfill). */
+export interface ReindexResult {
+  scanned: number;
+  indexed: number;
+  chunks_written: number;
+  skipped: number;
+  errors: string[];
 }

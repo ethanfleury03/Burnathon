@@ -47,6 +47,19 @@ async def setup_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 
+@pytest.fixture(autouse=True)
+def bind_test_async_session(monkeypatch):
+    """Route ``dependencies.async_session`` to the in-memory SQLite engine.
+
+    Background code (e.g. chat streaming persistence) opens ad-hoc sessions
+    via ``dependencies.async_session()`` instead of the overridden ``get_db``
+    dependency; without this patch it would try the real DATABASE_URL.
+    """
+    from app import dependencies
+
+    monkeypatch.setattr(dependencies, "async_session", TestSessionLocal)
+
+
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:

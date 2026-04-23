@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, getApiErrorMessage } from "../api/client";
-import type { ClassDetail, LectureOut } from "../api/types";
+import type { ClassDetail, ClassOut, LectureOut } from "../api/types";
 import LectureCard from "../components/LectureCard";
+import ClassChat from "../components/ClassChat";
+import InlineEdit from "../components/InlineEdit";
 import { PageHeader, MetaItem } from "../components/ui/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import {
@@ -34,6 +36,8 @@ export default function ClassDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState<SortKey>("newest");
   const [query, setQuery] = useState("");
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
 
   useEffect(() => {
     if (!classId) return;
@@ -47,6 +51,39 @@ export default function ClassDetailPage() {
       .catch((e) => setError(getApiErrorMessage(e, "We couldn't load this class.")))
       .finally(() => setLoading(false));
   }, [classId]);
+
+  const renameClass = async (next: string) => {
+    if (!cls) return;
+    const updated = await api.patch<ClassOut>(`/api/classes/${cls.id}`, {
+      title: next,
+    });
+    setCls({ ...cls, ...updated });
+  };
+
+  const togglePublish = async () => {
+    if (!cls) return;
+    const nextVisibility = cls.visibility === "public" ? "private" : "public";
+    if (nextVisibility === "public") {
+      const ok = window.confirm(
+        "Publish this class? Any signed-in user will be able to browse its lectures and chat with them on the Explore page."
+      );
+      if (!ok) return;
+    }
+    setPublishing(true);
+    setPublishError("");
+    try {
+      const updated = await api.patch<ClassOut>(`/api/classes/${cls.id}`, {
+        visibility: nextVisibility,
+      });
+      setCls({ ...cls, ...updated });
+    } catch (e) {
+      setPublishError(
+        getApiErrorMessage(e, "Couldn't change sharing settings.")
+      );
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const stats = useMemo(() => aggregate(cls?.lectures ?? []), [cls]);
 
@@ -113,12 +150,25 @@ export default function ClassDetailPage() {
   return (
     <div className="space-y-10">
       <PageHeader
-        eyebrow="Class"
-        crumbs={[{ label: "Library", to: "/" }, { label: cls.title }]}
-        title={cls.title}
+        eyebrow={cls.can_edit ? "Class" : "Public class"}
+        crumbs={[
+          { label: cls.can_edit ? "Library" : "Explore", to: cls.can_edit ? "/" : "/explore" },
+          { label: cls.title },
+        ]}
+        title={
+          <InlineEdit
+            value={cls.title}
+            onSave={renameClass}
+            canEdit={cls.can_edit}
+            ariaLabel="Rename class"
+            className="inline-block"
+          />
+        }
         description={
           cls.lecture_count === 0
-            ? "An empty classroom, waiting. Add a lecture to begin the archive."
+            ? cls.can_edit
+              ? "An empty classroom, waiting. Add a lecture to begin the archive."
+              : "This class has no lectures yet."
             : `A working archive of ${cls.lecture_count} ${pluralize(
                 cls.lecture_count,
                 "lecture"
@@ -130,6 +180,18 @@ export default function ClassDetailPage() {
               label="Created"
               value={formatDateLong(cls.created_at)}
             />
+            {cls.visibility === "public" && (
+              <MetaItem
+                label="Visibility"
+                value={
+                  <Badge tone="moss">
+                    {cls.published_at
+                      ? `Public · ${formatDateLong(cls.published_at)}`
+                      : "Public"}
+                  </Badge>
+                }
+              />
+            )}
             {cls.archived_at && (
               <MetaItem
                 label="Archived"
@@ -149,22 +211,53 @@ export default function ClassDetailPage() {
         }
         actions={
           <>
-            <Link to="/" className="btn btn-ghost">
-              ← Library
-            </Link>
             <Link
-              to={`/new-lecture?classId=${cls.id}`}
-              className="btn btn-primary"
+              to={cls.can_edit ? "/" : "/explore"}
+              className="btn btn-ghost"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
-                <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-              </svg>
-              Add lecture
+              ← {cls.can_edit ? "Library" : "Explore"}
             </Link>
+            {cls.can_edit && (
+              <button
+                type="button"
+                onClick={togglePublish}
+                disabled={publishing}
+                className={
+                  cls.visibility === "public"
+                    ? "btn btn-secondary"
+                    : "btn btn-secondary"
+                }
+                title={
+                  cls.visibility === "public"
+                    ? "Make this class private again"
+                    : "Publish for anyone to browse on Explore"
+                }
+              >
+                {publishing
+                  ? "Saving…"
+                  : cls.visibility === "public"
+                    ? "Unpublish"
+                    : "Publish"}
+              </button>
+            )}
+            {cls.can_edit && (
+              <Link
+                to={`/new-lecture?classId=${cls.id}`}
+                className="btn btn-primary"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+                  <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+                Add lecture
+              </Link>
+            )}
           </>
         }
       />
+      {publishError && <ErrorBanner message={publishError} />}
 
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] lg:items-start lg:gap-8">
+        <div className="min-w-0 space-y-10">
       {/* Class stats */}
       <section className="grid grid-cols-2 gap-[1px] overflow-hidden rounded-[12px] border bg-[var(--rule)] md:grid-cols-4">
         <MiniStat label="Lectures" value={cls.lectures.length.toString()} />
@@ -180,7 +273,11 @@ export default function ClassDetailPage() {
       {cls.lectures.length === 0 ? (
         <EmptyState
           title="No lectures in this class yet"
-          description="Upload an audio file or record directly in the browser. Once processed, it'll appear here with a summary, transcript and optional quiz."
+          description={
+            cls.can_edit
+              ? "Upload an audio file or record directly in the browser. Once processed, it'll appear here with a summary, transcript and optional quiz."
+              : "The owner hasn't added any lectures yet."
+          }
           icon={
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
               <path d="M10 2v10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -194,12 +291,14 @@ export default function ClassDetailPage() {
             </svg>
           }
           action={
-            <Link
-              to={`/new-lecture?classId=${cls.id}`}
-              className="btn btn-primary"
-            >
-              Add first lecture
-            </Link>
+            cls.can_edit ? (
+              <Link
+                to={`/new-lecture?classId=${cls.id}`}
+                className="btn btn-primary"
+              >
+                Add first lecture
+              </Link>
+            ) : undefined
           }
         />
       ) : (
@@ -273,6 +372,12 @@ export default function ClassDetailPage() {
           )}
         </section>
       )}
+        </div>
+
+        <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+          <ClassChat classId={cls.id} />
+        </aside>
+      </div>
     </div>
   );
 }

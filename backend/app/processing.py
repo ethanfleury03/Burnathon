@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import async_session
 from app.models import Lecture, LectureStatus
-from app.services import ai, transcription
+from app.services import ai, retrieval, transcription
 from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -53,6 +53,24 @@ async def process_lecture(lecture_id: uuid.UUID):
             await _update_status(session, lecture_id, LectureStatus.ready, summary_text=summary)
 
         logger.info("Lecture %s processing complete", lecture_id)
+
+        # Step 3: Index transcript chunks for class-chat RAG. Failures here
+        # are non-fatal; the lecture stays ready and can be reindexed later
+        # via POST /api/admin/reindex.
+        try:
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Lecture).where(Lecture.id == lecture_id)
+                )
+                lecture = result.scalar_one()
+                written = await retrieval.index_lecture(session, lecture)
+                logger.info(
+                    "Indexed %d chunks for lecture %s", written, lecture_id
+                )
+        except Exception:
+            logger.exception(
+                "Chunk indexing failed for lecture %s (non-fatal)", lecture_id
+            )
 
     except Exception as e:
         logger.exception("Lecture %s processing failed", lecture_id)

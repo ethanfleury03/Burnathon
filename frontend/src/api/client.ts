@@ -84,3 +84,109 @@ export const api = {
   upload: <T>(path: string, formData: FormData) =>
     request<T>(path, { method: "POST", body: formData }),
 };
+
+export interface StreamOptions {
+  onToken?: (token: string) => void;
+  onEvent?: (event: string, data: string) => void;
+  onDone?: (payload?: unknown) => void;
+  onError?: (error: Error) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Minimal Server-Sent Events client for POST endpoints that stream tokens.
+ *
+ * Event format (server emits):
+ *   event: token\ndata: <json-encoded string token>\n\n
+ *   event: done\ndata: {"message": ...}\n\n
+ *   event: error\ndata: <json-encoded error string>\n\n
+ */
+export async function streamPost(
+  path: string,
+  body: unknown,
+  options: StreamOptions = {}
+): Promise<void> {
+  const token = _getTokenFn ? await _getTokenFn() : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(resolveApiUrl(path), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+
+  if (!res.ok || !res.body) {
+    const errBody = await res.json().catch(() => ({ detail: res.statusText }));
+    const err = new ApiError(res.status, errBody.detail || `Request failed: ${res.status}`);
+    options.onError?.(err);
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sepIndex;
+      while ((sepIndex = buffer.indexOf("\n\n")) !== -1) {
+        const rawEvent = buffer.slice(0, sepIndex);
+        buffer = buffer.slice(sepIndex + 2);
+        if (!rawEvent.trim()) continue;
+        let eventName = "message";
+        const dataLines: string[] = [];
+        for (const line of rawEvent.split("\n")) {
+          if (line.startsWith("event:")) eventName = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""));
+        }
+        const data = dataLines.join("\n");
+        options.onEvent?.(eventName, data);
+        if (eventName === "token") {
+          let tokenText = data;
+          try {
+            tokenText = data ? JSON.parse(data) : "";
+          } catch {
+            /* plain-text fallback for older servers */
+          }
+          options.onToken?.(typeof tokenText === "string" ? tokenText : String(tokenText));
+        }
+        if (eventName === "done") {
+          try {
+            options.onDone?.(data ? JSON.parse(data) : undefined);
+          } catch {
+            options.onDone?.(data);
+          }
+          return;
+        }
+        if (eventName === "error") {
+          let msg = data || "Stream error";
+          try {
+            if (data) msg = JSON.parse(data) as string;
+          } catch {
+            /* keep raw */
+          }
+          options.onError?.(new Error(String(msg)));
+          return;
+        }
+      }
+    }
+    options.onDone?.();
+  } catch (err) {
+    if (err instanceof Error) options.onError?.(err);
+    throw err;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      /* noop */
+    }
+  }
+}

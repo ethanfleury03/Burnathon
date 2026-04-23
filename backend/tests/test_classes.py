@@ -76,9 +76,75 @@ async def test_get_class_not_found(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_class_forbidden_for_other_user(other_client: AsyncClient, sample_class: Class):
+async def test_get_private_class_hidden_from_other_user(
+    other_client: AsyncClient, sample_class: Class
+):
+    """Private classes should 404 (not 403) for non-owners to hide their existence."""
     resp = await other_client.get(f"/api/classes/{sample_class.id}")
-    assert resp.status_code == 403
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_publish_class_stamps_published_at(client: AsyncClient, sample_class: Class):
+    r = await client.patch(
+        f"/api/classes/{sample_class.id}", json={"visibility": "public"}
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["visibility"] == "public"
+    assert data["published_at"] is not None
+    assert data["can_edit"] is True
+
+
+async def _publish_class(db_session, cls: Class) -> None:
+    from datetime import datetime, timezone
+
+    from app.models import ClassVisibility
+
+    cls.visibility = ClassVisibility.public
+    cls.published_at = datetime.now(timezone.utc)
+    db_session.add(cls)
+    await db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_public_class_visible_to_other_user(
+    other_client: AsyncClient, sample_class: Class, db_session
+):
+    await _publish_class(db_session, sample_class)
+    r = await other_client.get(f"/api/classes/{sample_class.id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["visibility"] == "public"
+    assert data["can_edit"] is False
+
+
+@pytest.mark.asyncio
+async def test_explore_lists_public_classes_only(
+    other_client: AsyncClient, sample_class: Class, db_session
+):
+    r = await other_client.get("/api/classes/explore")
+    assert r.status_code == 200
+    assert r.json() == []
+
+    await _publish_class(db_session, sample_class)
+
+    r = await other_client.get("/api/classes/explore")
+    assert r.status_code == 200
+    items = r.json()
+    assert len(items) == 1
+    assert items[0]["title"] == "CS 101"
+
+
+@pytest.mark.asyncio
+async def test_public_viewer_cannot_edit_title(
+    other_client: AsyncClient, sample_class: Class, db_session
+):
+    await _publish_class(db_session, sample_class)
+    r = await other_client.patch(
+        f"/api/classes/{sample_class.id}", json={"title": "Stolen"}
+    )
+    assert r.status_code == 403
 
 
 @pytest.mark.asyncio

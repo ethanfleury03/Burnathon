@@ -1,15 +1,25 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.dependencies import DB, CurrentUser
-from app.models import Class, Lecture, LectureStatus, UserRole
+from app.dependencies import (
+    DB,
+    CurrentUser,
+    load_class_for_write,
+    load_lecture_for_read,
+    load_lecture_for_write,
+)
+from app.models import Lecture, LectureStatus
 from app.processing import generate_quiz_for_lecture, process_lecture
 from app.serializers import serialize_lecture, serialize_lecture_detail
-from app.schemas import LectureDetail, LectureOut
+from app.schemas import LectureDetail, LectureOut, LectureUpdate
+from app.services import ai, web_search
 from app.services.storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["lectures"])
 
@@ -28,12 +38,7 @@ async def upload_lecture(
     title: str = Form(...),
     notes: str | None = Form(None),
 ):
-    result = await db.execute(select(Class).where(Class.id == class_id))
-    cls = result.scalar_one_or_none()
-    if cls is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
-    if user.role != UserRole.admin and cls.owner_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your class")
+    cls = await load_class_for_write(class_id, db, user)
     if cls.archived_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Class is archived")
 
@@ -65,26 +70,86 @@ async def upload_lecture(
 
 @router.get("/api/lectures/{lecture_id}", response_model=LectureDetail)
 async def get_lecture(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
-    result = await db.execute(select(Lecture).where(Lecture.id == lecture_id, Lecture.deleted_at.is_(None)))
-    lecture = result.scalar_one_or_none()
-    if lecture is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
-    if user.role != UserRole.admin and lecture.owner_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
-    return serialize_lecture_detail(lecture)
+    lecture, _cls, can_edit = await load_lecture_for_read(lecture_id, db, user)
+    return serialize_lecture_detail(lecture, can_edit=can_edit)
+
+
+@router.patch("/api/lectures/{lecture_id}", response_model=LectureDetail)
+async def update_lecture(
+    lecture_id: uuid.UUID, body: LectureUpdate, user: CurrentUser, db: DB
+):
+    lecture = await load_lecture_for_write(lecture_id, db, user)
+    if body.title is not None:
+        title = body.title.strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Title cannot be empty",
+            )
+        lecture.title = title
+    if body.notes_text is not None:
+        lecture.notes_text = body.notes_text
+    await db.commit()
+    await db.refresh(lecture)
+    return serialize_lecture_detail(lecture, can_edit=True)
 
 
 @router.delete("/api/lectures/{lecture_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_lecture(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
-    result = await db.execute(select(Lecture).where(Lecture.id == lecture_id))
-    lecture = result.scalar_one_or_none()
-    if lecture is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
-    if user.role != UserRole.admin and lecture.owner_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
-
+    lecture = await load_lecture_for_write(lecture_id, db, user)
     lecture.deleted_at = datetime.now(timezone.utc)
     await db.commit()
+
+
+@router.post("/api/lectures/{lecture_id}/augment", response_model=LectureDetail)
+async def augment_lecture(lecture_id: uuid.UUID, user: CurrentUser, db: DB):
+    """Generate a teaching-style deep dive backed by live web citations."""
+    lecture = await load_lecture_for_write(lecture_id, db, user)
+    if lecture.status != LectureStatus.ready:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lecture must finish processing before generating a deep dive",
+        )
+    if not lecture.summary_text and not lecture.transcript_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Lecture has no summary or transcript to augment",
+        )
+
+    queries = ai.derive_augmentation_queries(lecture.title, lecture.summary_text)
+    try:
+        results = await web_search.search_many(queries, max_results_each=4)
+    except web_search.TavilyUnavailable as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e)
+        )
+    except Exception as e:
+        logger.exception("Tavily search failed for lecture %s", lecture_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Web search failed: {e}",
+        )
+
+    try:
+        augmentation = await ai.augment_lecture(
+            title=lecture.title,
+            summary=lecture.summary_text,
+            transcript_excerpt=(lecture.transcript_text or "")[:4000],
+            search_results=results,
+        )
+    except Exception as e:
+        logger.exception("Augmentation failed for lecture %s", lecture_id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM augmentation failed: {e}",
+        )
+
+    lecture.augmented_text = augmentation["text"] or None
+    lecture.augmented_citations = augmentation["citations"] or None
+    lecture.augmented_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(lecture)
+    return serialize_lecture_detail(lecture, can_edit=True)
 
 
 @router.post("/api/lectures/{lecture_id}/generate-quiz", response_model=LectureOut)
@@ -94,12 +159,7 @@ async def trigger_quiz_generation(
     db: DB,
     background_tasks: BackgroundTasks,
 ):
-    result = await db.execute(select(Lecture).where(Lecture.id == lecture_id, Lecture.deleted_at.is_(None)))
-    lecture = result.scalar_one_or_none()
-    if lecture is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
-    if user.role != UserRole.admin and lecture.owner_user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
+    lecture = await load_lecture_for_write(lecture_id, db, user)
     if not lecture.transcript_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

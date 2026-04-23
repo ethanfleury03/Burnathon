@@ -14,6 +14,7 @@ import LectureDetailPage from "./pages/LectureDetailPage";
 import NewLecturePage from "./pages/NewLecturePage";
 import AdminPage from "./pages/AdminPage";
 import DbPage from "./pages/DbPage";
+import ExplorePage from "./pages/ExplorePage";
 
 function TokenSync() {
   const { getToken } = useAuth();
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/classes/:classId" element={<ClassDetailPage />} />
             <Route path="/lectures/:lectureId" element={<LectureDetailPage />} />
+            <Route path="/explore" element={<ExplorePage />} />
             <Route path="/new-lecture" element={<NewLecturePage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/db" element={<DbPage />} />

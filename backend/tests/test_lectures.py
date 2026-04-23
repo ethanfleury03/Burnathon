@@ -90,10 +90,65 @@ async def test_get_lecture_not_found(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_lecture_forbidden_for_other_user(
+async def test_private_lecture_hidden_from_other_user(
     other_client: AsyncClient, sample_lecture: Lecture
 ):
+    """Lectures inside a private class should 404 for non-owners."""
     resp = await other_client.get(f"/api/lectures/{sample_lecture.id}")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_lecture_in_public_class_visible_to_other_user(
+    other_client: AsyncClient,
+    sample_class: Class,
+    sample_lecture: Lecture,
+    db_session,
+):
+    from datetime import datetime, timezone
+
+    from app.models import ClassVisibility
+
+    sample_class.visibility = ClassVisibility.public
+    sample_class.published_at = datetime.now(timezone.utc)
+    db_session.add(sample_class)
+    await db_session.commit()
+
+    resp = await other_client.get(f"/api/lectures/{sample_lecture.id}")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["can_edit"] is False
+
+
+@pytest.mark.asyncio
+async def test_rename_lecture(client: AsyncClient, sample_lecture: Lecture):
+    resp = await client.patch(
+        f"/api/lectures/{sample_lecture.id}",
+        json={"title": "Lecture 1: Fourier Transforms"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Lecture 1: Fourier Transforms"
+
+
+@pytest.mark.asyncio
+async def test_rename_lecture_forbidden_for_other_user(
+    other_client: AsyncClient,
+    sample_class: Class,
+    sample_lecture: Lecture,
+    db_session,
+):
+    from datetime import datetime, timezone
+
+    from app.models import ClassVisibility
+
+    sample_class.visibility = ClassVisibility.public
+    sample_class.published_at = datetime.now(timezone.utc)
+    db_session.add(sample_class)
+    await db_session.commit()
+
+    resp = await other_client.patch(
+        f"/api/lectures/{sample_lecture.id}", json={"title": "Stolen"}
+    )
     assert resp.status_code == 403
 
 

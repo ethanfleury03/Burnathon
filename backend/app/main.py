@@ -11,7 +11,7 @@ from app.db_ready import classify_database_error, get_database_status
 from app.config import settings
 from app.dependencies import DB, CurrentUser
 from app.models import Class, Lecture
-from app.routers import admin, classes, db_meta, lectures
+from app.routers import admin, chat, classes, db_meta, lectures
 from app.schemas import MeOut, UserOut, UserStats
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +30,7 @@ app.include_router(classes.router)
 app.include_router(lectures.router)
 app.include_router(admin.router)
 app.include_router(db_meta.router)
+app.include_router(chat.router)
 
 
 @app.middleware("http")

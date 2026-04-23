@@ -6,6 +6,7 @@ import type { MeOut } from "../../api/types";
 
 const primaryNav = [
   { to: "/", label: "Library", end: true },
+  { to: "/explore", label: "Explore", end: false },
   { to: "/new-lecture", label: "New lecture", end: false },
 ];
 

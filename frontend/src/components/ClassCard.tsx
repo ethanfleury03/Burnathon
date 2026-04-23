@@ -6,13 +6,15 @@ import { Badge } from "./ui/Badge";
 interface ClassCardProps {
   cls: ClassOut;
   accent?: string;
+  publicByline?: string | null;
 }
 
 /**
  * Editorial class card: serif title, measured hierarchy,
  * and quick-scan meta data. Archived state is surfaced with a quiet chip.
  */
-export default function ClassCard({ cls, accent }: ClassCardProps) {
+export default function ClassCard({ cls, accent, publicByline }: ClassCardProps) {
+  const isPublic = cls.visibility === "public";
   const created = new Date(cls.created_at);
   const monogram = (cls.title || "Class")
     .split(/\s+/)
@@ -44,9 +46,10 @@ export default function ClassCard({ cls, accent }: ClassCardProps) {
               <h3 className="font-serif text-[17px] font-semibold leading-[1.2] tracking-tightish text-ink-900 line-clamp-2 group-hover:text-ink-800">
                 {cls.title}
               </h3>
-              {cls.archived_at && (
-                <Badge tone="ochre">Archived</Badge>
-              )}
+              <div className="flex flex-none flex-wrap items-center justify-end gap-1">
+                {isPublic && <Badge tone="moss">Public</Badge>}
+                {cls.archived_at && <Badge tone="ochre">Archived</Badge>}
+              </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2 text-[13px] text-ink-500">
               <span className="font-serif text-[15px] font-semibold text-ink-800 tabular-nums">
@@ -58,7 +61,9 @@ export default function ClassCard({ cls, accent }: ClassCardProps) {
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-[var(--rule)] pt-3 text-[12px] text-ink-500">
-          <span>Created {formatDateShort(cls.created_at)}</span>
+          <span>
+            {publicByline ? `By ${publicByline}` : `Created ${formatDateShort(cls.created_at)}`}
+          </span>
           <span className="mono text-[11.5px] text-ink-400" title={created.toISOString()}>
             {formatRelative(cls.created_at)}
           </span>

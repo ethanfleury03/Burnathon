@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   ApiError,
   api,
@@ -8,9 +8,11 @@ import {
 } from "../api/client";
 import type { ClassOut, LectureDetail } from "../api/types";
 import QuizView from "../components/QuizView";
+import InlineEdit from "../components/InlineEdit";
 import { PageHeader, MetaItem } from "../components/ui/PageHeader";
 import { StatusPill } from "../components/ui/StatusPill";
 import { Spinner } from "../components/ui/Spinner";
+import { Badge } from "../components/ui/Badge";
 import {
   EmptyState,
   ErrorBanner,
@@ -28,14 +30,19 @@ import {
   isLectureProcessing,
   type LectureStatus,
 } from "../lib/status";
+import { chunkTranscript } from "../lib/chunkTranscript";
 
-type Tab = "summary" | "transcript" | "quiz" | "notes";
+type Tab = "summary" | "deep-dive" | "transcript" | "quiz" | "notes";
 
 const tabDescriptors: Record<
   Tab,
   { label: string; hint: string }
 > = {
   summary: { label: "Summary", hint: "The takeaway in editor's voice" },
+  "deep-dive": {
+    label: "Deep dive",
+    hint: "LLM-expanded teaching article with live web citations",
+  },
   transcript: { label: "Transcript", hint: "The full machine transcript" },
   quiz: { label: "Quiz & Cards", hint: "Self-check on the material" },
   notes: { label: "Your notes", hint: "What you attached before uploading" },
@@ -50,6 +57,8 @@ const processingStages: LectureStatus[] = [
 
 export default function LectureDetailPage() {
   const { lectureId } = useParams<{ lectureId: string }>();
+  const [search] = useSearchParams();
+  const highlight = search.get("highlight");
   const [lecture, setLecture] = useState<LectureDetail | null>(null);
   const [parentClass, setParentClass] = useState<ClassOut | null>(null);
   const [error, setError] = useState("");
@@ -57,6 +66,8 @@ export default function LectureDetailPage() {
   const [generatingQuiz, setGeneratingQuiz] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("summary");
   const [justCopied, setJustCopied] = useState<Tab | null>(null);
+  const [augmenting, setAugmenting] = useState(false);
+  const [augmentError, setAugmentError] = useState("");
 
   const fetchLecture = (showLoading = false) => {
     if (!lectureId) return;
@@ -88,15 +99,14 @@ export default function LectureDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lectureId, lecture?.status]);
 
-  // Load parent class for breadcrumbs (cheap, best-effort).
+  // Load parent class for breadcrumbs (works for public classes too).
   useEffect(() => {
     if (!lecture?.class_id) return;
     let cancelled = false;
     api
-      .get<ClassOut[]>("/api/classes")
-      .then((list) => {
-        if (cancelled) return;
-        setParentClass(list.find((c) => c.id === lecture.class_id) ?? null);
+      .get<ClassOut>(`/api/classes/${lecture.class_id}`)
+      .then((cls) => {
+        if (!cancelled) setParentClass(cls);
       })
       .catch(() => {
         /* breadcrumbs are non-essential */
@@ -130,6 +140,51 @@ export default function LectureDetailPage() {
       setGeneratingQuiz(false);
     }
   };
+
+  const renameLecture = async (next: string) => {
+    if (!lectureId) return;
+    const updated = await api.patch<LectureDetail>(
+      `/api/lectures/${lectureId}`,
+      { title: next }
+    );
+    setLecture(updated);
+  };
+
+  const handleGenerateDeepDive = async () => {
+    if (!lectureId) return;
+    setAugmenting(true);
+    setAugmentError("");
+    try {
+      const updated = await api.post<LectureDetail>(
+        `/api/lectures/${lectureId}/augment`
+      );
+      setLecture(updated);
+    } catch (err) {
+      setAugmentError(
+        getApiErrorMessage(
+          err,
+          "Couldn't generate the deep dive. Try again shortly."
+        )
+      );
+    } finally {
+      setAugmenting(false);
+    }
+  };
+
+  // Scroll to a referenced chunk when landing with ?highlight=chunk-N.
+  useEffect(() => {
+    if (!highlight || !lecture || lecture.status !== "ready") return;
+    setActiveTab("transcript");
+    const id = window.requestAnimationFrame(() => {
+      const el = document.getElementById(highlight);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("chunk-flash");
+        window.setTimeout(() => el.classList.remove("chunk-flash"), 2400);
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [highlight, lecture]);
 
   const summaryStats = useMemo(() => {
     if (!lecture?.summary_text) return null;
@@ -196,20 +251,33 @@ export default function LectureDetailPage() {
 
   const isProcessing = isLectureProcessing(lecture.status);
   const statusInfo = getStatus(lecture.status);
+  const canEdit = lecture.can_edit;
+  const isPublicClass = parentClass?.visibility === "public";
 
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Lecture"
+        eyebrow={canEdit ? "Lecture" : "Public lecture"}
         crumbs={[
-          { label: "Library", to: "/" },
+          {
+            label: canEdit ? "Library" : "Explore",
+            to: canEdit ? "/" : "/explore",
+          },
           {
             label: parentClass?.title ?? "Class",
             to: `/classes/${lecture.class_id}`,
           },
           { label: lecture.title },
         ]}
-        title={lecture.title}
+        title={
+          <InlineEdit
+            value={lecture.title}
+            onSave={renameLecture}
+            canEdit={canEdit}
+            ariaLabel="Rename lecture"
+            className="inline-block"
+          />
+        }
         description={
           lecture.status === "failed"
             ? "This recording didn't finish processing. The details below can help you retry or inspect."
@@ -247,6 +315,12 @@ export default function LectureDetailPage() {
                 </span>
               }
             />
+            {isPublicClass && (
+              <MetaItem
+                label="Visibility"
+                value={<Badge tone="moss">Public · via {parentClass?.title}</Badge>}
+              />
+            )}
           </>
         }
         actions={
@@ -403,6 +477,16 @@ export default function LectureDetailPage() {
                 </ReadingPane>
               )}
 
+              {activeTab === "deep-dive" && (
+                <DeepDivePane
+                  lecture={lecture}
+                  canEdit={canEdit}
+                  working={augmenting}
+                  onGenerate={() => void handleGenerateDeepDive()}
+                  error={augmentError}
+                />
+              )}
+
               {activeTab === "transcript" && (
                 <ReadingPane
                   title="Transcript"
@@ -417,7 +501,15 @@ export default function LectureDetailPage() {
                 >
                   {lecture.transcript_text ? (
                     <div className="prose-reading font-sans">
-                      {paragraphs(lecture.transcript_text, "text-ink-700")}
+                      {chunkTranscript(lecture.transcript_text).map((chunk, i) => (
+                        <p
+                          key={i}
+                          id={`chunk-${i}`}
+                          className="whitespace-pre-wrap scroll-mt-24 text-ink-700"
+                        >
+                          {chunk.trim()}
+                        </p>
+                      ))}
                     </div>
                   ) : (
                     <p className="text-[14px] text-ink-500">
@@ -466,7 +558,11 @@ export default function LectureDetailPage() {
                     <EmptyState
                       className="!py-10"
                       title="No quiz yet"
-                      description="Generate multiple-choice questions and flashcards from this lecture's transcript and summary."
+                      description={
+                        canEdit
+                          ? "Generate multiple-choice questions and flashcards from this lecture's transcript and summary."
+                          : "The owner hasn't generated a quiz for this lecture."
+                      }
                       icon={
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden>
                           <path
@@ -478,20 +574,22 @@ export default function LectureDetailPage() {
                         </svg>
                       }
                       action={
-                        <button
-                          type="button"
-                          onClick={() => void handleGenerateQuiz()}
-                          disabled={generatingQuiz}
-                          className="btn btn-primary"
-                        >
-                          {generatingQuiz ? (
-                            <>
-                              <Spinner /> Generating…
-                            </>
-                          ) : (
-                            "Generate quiz & flashcards"
-                          )}
-                        </button>
+                        canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleGenerateQuiz()}
+                            disabled={generatingQuiz}
+                            className="btn btn-primary"
+                          >
+                            {generatingQuiz ? (
+                              <>
+                                <Spinner /> Generating…
+                              </>
+                            ) : (
+                              "Generate quiz & flashcards"
+                            )}
+                          </button>
+                        ) : undefined
                       }
                     />
                   )}
@@ -735,10 +833,18 @@ function SideRow({
   );
 }
 
-function paragraphs(text: string, className = ""): ReactNode[] {
+function paragraphs(
+  text: string,
+  className = "",
+  idPrefix?: string
+): ReactNode[] {
   const parts = text.split(/\n{2,}/);
   return parts.map((p, i) => (
-    <p key={i} className={`whitespace-pre-wrap ${className}`}>
+    <p
+      key={i}
+      id={idPrefix ? `${idPrefix}${i}` : undefined}
+      className={`whitespace-pre-wrap scroll-mt-24 ${className}`}
+    >
       {p.trim()}
     </p>
   ));
@@ -748,4 +854,163 @@ function textStats(text: string): { words: number; minutes: number } {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   const minutes = Math.max(1, Math.round(words / 220));
   return { words, minutes };
+}
+
+function DeepDivePane({
+  lecture,
+  canEdit,
+  working,
+  onGenerate,
+  error,
+}: {
+  lecture: LectureDetail;
+  canEdit: boolean;
+  working: boolean;
+  onGenerate: () => void;
+  error: string;
+}) {
+  const citations = lecture.augmented_citations ?? [];
+  const renderWithCitations = (text: string): ReactNode[] => {
+    const nodes: ReactNode[] = [];
+    const pattern = /\[(\d+)\]/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        nodes.push(text.slice(lastIndex, match.index));
+      }
+      const idx = match[1];
+      const citation = citations.find((c) => String(c.idx) === idx);
+      nodes.push(
+        <sup key={`cite-${key++}`} className="mx-0.5 align-super">
+          <a
+            href={citation?.url ?? `#ref-${idx}`}
+            target={citation ? "_blank" : undefined}
+            rel={citation ? "noreferrer" : undefined}
+            className="rounded bg-paper-200 px-1 py-0.5 text-[10.5px] font-semibold text-ink-800 no-underline hover:bg-ochre-100 hover:text-ochre-500"
+            title={citation?.title ?? `Reference ${idx}`}
+          >
+            {idx}
+          </a>
+        </sup>
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+    return nodes;
+  };
+
+  return (
+    <article className="surface overflow-hidden">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b rule px-5 py-4 md:px-6">
+        <div>
+          <h2 className="display-sm">Deep dive</h2>
+          <p className="mt-0.5 text-[12.5px] text-ink-500">
+            An expanded teaching article written with live web citations, built
+            from this lecture&rsquo;s summary.
+          </p>
+        </div>
+        {canEdit && lecture.augmented_text && (
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={working}
+            className="btn btn-ghost text-[12.5px]"
+          >
+            {working ? (
+              <>
+                <Spinner /> Regenerating…
+              </>
+            ) : (
+              "Regenerate"
+            )}
+          </button>
+        )}
+      </header>
+      <div className="px-5 py-6 md:px-8 md:py-8">
+        {error && <ErrorBanner message={error} />}
+        {lecture.augmented_text ? (
+          <div className="space-y-8">
+            <article className="prose-editorial">
+              {lecture.augmented_text
+                .split(/\n{2,}/)
+                .map((para, i) => (
+                  <p key={i} className="whitespace-pre-wrap">
+                    {renderWithCitations(para.trim())}
+                  </p>
+                ))}
+            </article>
+            {citations.length > 0 && (
+              <section>
+                <p className="eyebrow mb-3">References</p>
+                <ol className="space-y-3">
+                  {citations.map((c) => (
+                    <li
+                      key={c.idx}
+                      id={`ref-${c.idx}`}
+                      className="rounded-md border bg-paper-50 p-3"
+                    >
+                      <div className="flex items-baseline gap-2">
+                        <span className="mono text-[11.5px] text-ink-400 tabular-nums">
+                          [{c.idx}]
+                        </span>
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-serif text-[14.5px] font-semibold text-ink-900 hover:text-ochre-500"
+                        >
+                          {c.title}
+                        </a>
+                      </div>
+                      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-600">
+                        {c.snippet}
+                      </p>
+                      <p className="mt-1 mono text-[11px] text-ink-400 truncate">
+                        {c.url}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+            {lecture.augmented_at && (
+              <p className="mono text-[11.5px] text-ink-400">
+                Last generated {formatRelative(lecture.augmented_at)}.
+              </p>
+            )}
+          </div>
+        ) : canEdit ? (
+          <EmptyState
+            className="!py-10"
+            title="Expand this lecture into a teaching article"
+            description="We'll run 2-3 focused web searches and ask the model to weave the lecture summary together with external sources. Citations are shown inline and in a References section."
+            action={
+              <button
+                type="button"
+                onClick={onGenerate}
+                disabled={working}
+                className="btn btn-primary"
+              >
+                {working ? (
+                  <>
+                    <Spinner /> Generating…
+                  </>
+                ) : (
+                  "Generate deep dive"
+                )}
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            className="!py-10"
+            title="No deep dive yet"
+            description="The owner hasn't generated a deep dive for this lecture."
+          />
+        )}
+      </div>
+    </article>
+  );
 }

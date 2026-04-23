@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, getApiErrorMessage } from "../api/client";
-import type { ClassOut, LectureOut, MeOut, UserOut } from "../api/types";
+import type {
+  ClassOut,
+  LectureOut,
+  MeOut,
+  ReindexResult,
+  UserOut,
+} from "../api/types";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Badge } from "../components/ui/Badge";
 import { StatusPill } from "../components/ui/StatusPill";
@@ -45,6 +51,8 @@ export default function AdminPage() {
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | LectureOut["status"]>("all");
   const [busyUser, setBusyUser] = useState<string | null>(null);
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexBanner, setReindexBanner] = useState<string | null>(null);
 
   const loadData = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -82,6 +90,23 @@ export default function AdminPage() {
       }
     })();
   }, []);
+
+  const runReindex = async () => {
+    setReindexing(true);
+    setReindexBanner(null);
+    try {
+      const r = await api.post<ReindexResult>(
+        "/api/admin/reindex?only_missing=true"
+      );
+      setReindexBanner(
+        `Reindexed ${r.indexed} lectures (${r.chunks_written} chunks). Skipped ${r.skipped} with existing chunks.`
+      );
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Reindex failed."));
+    } finally {
+      setReindexing(false);
+    }
+  };
 
   const toggleRole = async (userId: string, currentRole: string) => {
     const newRole = currentRole === "admin" ? "user" : "admin";
@@ -207,9 +232,24 @@ export default function AdminPage() {
               )}
               Refresh
             </button>
+            <button
+              type="button"
+              onClick={() => void runReindex()}
+              disabled={reindexing || loading}
+              className="btn btn-secondary"
+              title="Rebuild pgvector chunks for class chat (CPU + model download on first run)"
+            >
+              {reindexing ? <Spinner /> : "Reindex RAG"}
+            </button>
           </>
         }
       />
+
+      {reindexBanner && (
+        <p className="rounded-[10px] border border-moss-200 bg-moss-50 px-4 py-2.5 text-[13px] text-ink-800">
+          {reindexBanner}
+        </p>
+      )}
 
       {/* Overview tiles */}
       <section className="grid grid-cols-2 gap-[1px] overflow-hidden rounded-[12px] border bg-[var(--rule)] md:grid-cols-4">

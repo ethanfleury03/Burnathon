@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.models import User, UserRole
+from app.models import Class, ClassVisibility, Lecture, User, UserRole
 
 engine = create_async_engine(settings.database_url, echo=False)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
@@ -111,3 +111,81 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 ClerkJWTPayload = Annotated[dict, Depends(verify_clerk_jwt)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
 AdminUser = Annotated[User, Depends(require_admin)]
+
+
+def _user_can_edit_class(cls: Class, user: User) -> bool:
+    """Admins and owners can mutate; public viewers cannot."""
+    return user.role == UserRole.admin or cls.owner_user_id == user.id
+
+
+async def load_class_for_read(
+    class_id: uuid.UUID,
+    session: AsyncSession,
+    user: User,
+) -> tuple[Class, bool]:
+    """Load a class if the user can read it (owner, admin, or public)."""
+    result = await session.execute(select(Class).where(Class.id == class_id))
+    cls = result.scalar_one_or_none()
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
+
+    is_owner = _user_can_edit_class(cls, user)
+    is_public = cls.visibility == ClassVisibility.public
+
+    if not is_owner and not is_public:
+        # Hide existence of private classes the viewer cannot see.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
+
+    return cls, is_owner
+
+
+async def load_class_for_write(
+    class_id: uuid.UUID,
+    session: AsyncSession,
+    user: User,
+) -> Class:
+    result = await session.execute(select(Class).where(Class.id == class_id))
+    cls = result.scalar_one_or_none()
+    if cls is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Class not found")
+    if not _user_can_edit_class(cls, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your class")
+    return cls
+
+
+async def load_lecture_for_read(
+    lecture_id: uuid.UUID,
+    session: AsyncSession,
+    user: User,
+) -> tuple[Lecture, Class, bool]:
+    """Return (lecture, parent class, can_edit) for a lecture the user can view."""
+    result = await session.execute(
+        select(Lecture, Class)
+        .join(Class, Class.id == Lecture.class_id)
+        .where(Lecture.id == lecture_id, Lecture.deleted_at.is_(None))
+    )
+    row = result.first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+    lecture, cls = row
+    can_edit = _user_can_edit_class(cls, user)
+    is_public = cls.visibility == ClassVisibility.public
+    if not can_edit and not is_public:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+    return lecture, cls, can_edit
+
+
+async def load_lecture_for_write(
+    lecture_id: uuid.UUID,
+    session: AsyncSession,
+    user: User,
+) -> Lecture:
+    result = await session.execute(
+        select(Lecture).where(Lecture.id == lecture_id, Lecture.deleted_at.is_(None))
+    )
+    lecture = result.scalar_one_or_none()
+    if lecture is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lecture not found")
+    if user.role != UserRole.admin and lecture.owner_user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your lecture")
+    return lecture

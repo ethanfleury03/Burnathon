@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     openrouter_model: str = "deepseek/deepseek-v3.2"
     storage_backend: str = "local"
     gcs_bucket: str = ""
+    tavily_api_key: str = Field(default="", validation_alias="TAVILY_API_KEY")
+    embeddings_model_name: str = Field(
+        default="BAAI/bge-small-en-v1.5",
+        validation_alias="EMBEDDINGS_MODEL_NAME",
+    )
+    embeddings_dim: int = 384
     allowed_origins_raw: str = Field(
         default="http://localhost:5173",
         validation_alias="ALLOWED_ORIGINS",

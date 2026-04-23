@@ -403,4 +403,47 @@ body {
     border-radius: 999px;
     border: 2px solid var(--bg);
   }
+
+  /* Highlight flash for ?highlight=chunk-N deep-links from chat citations. */
+  .chunk-flash {
+    animation: chunk-flash 2.2s ease-out;
+    border-radius: 6px;
+  }
+  @keyframes chunk-flash {
+    0% {
+      background-color: rgba(198, 156, 60, 0.28);
+      box-shadow: 0 0 0 4px rgba(198, 156, 60, 0.18);
+    }
+    70% {
+      background-color: rgba(198, 156, 60, 0.1);
+      box-shadow: 0 0 0 4px rgba(198, 156, 60, 0.0);
+    }
+    100% {
+      background-color: transparent;
+      box-shadow: none;
+    }
+  }
+
+  /* Chat citation chip (used in ClassChat message bubbles). */
+  .citation-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    margin: 0 2px;
+    border-radius: 4px;
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    cursor: pointer;
+    vertical-align: baseline;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .citation-chip:hover {
+    background: #F4DDD4;
+    color: var(--accent);
+  }
 }
